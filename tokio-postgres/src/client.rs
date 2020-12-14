@@ -3,6 +3,7 @@ use crate::Socket;
 use crate::codec::{BackendMessages, FrontendMessage};
 use crate::config::{SslMode, SslNegotiation};
 use crate::connection::{Request, RequestMessages};
+use crate::copy_both::CopyBothDuplex;
 use crate::copy_out::CopyOutStream;
 #[cfg(feature = "runtime")]
 use crate::keepalive::KeepaliveConfig;
@@ -14,7 +15,7 @@ use crate::tls::TlsConnect;
 use crate::types::{Oid, ToSql, Type};
 use crate::{
     CancelToken, CopyInSink, Error, Row, SimpleQueryMessage, Statement, ToStatement, Transaction,
-    TransactionBuilder, copy_in, copy_out, prepare, query, simple_query, slice_iter,
+    TransactionBuilder, copy_both, copy_in, copy_out, prepare, query, simple_query, slice_iter,
 };
 use bytes::{Buf, BytesMut};
 use fallible_iterator::FallibleIterator;
@@ -636,6 +637,14 @@ impl Client {
         copy_in::copy_in(self.inner(), statement).await
     }
 
+    /// Executes a `COPY FROM STDIN` query, returning a sink used to write the copy data.
+    pub async fn copy_in_simple<U>(&self, query: &str) -> Result<CopyInSink<U>, Error>
+    where
+        U: Buf + 'static + Send,
+    {
+        copy_in::copy_in_simple(self.inner(), query).await
+    }
+
     /// Executes a `COPY TO STDOUT` statement, returning a stream of the resulting data.
     ///
     /// PostgreSQL does not support parameters in `COPY` statements, so this method does not take any.
@@ -645,6 +654,20 @@ impl Client {
     {
         let statement = statement.__convert().into_statement(&self.inner).await?;
         copy_out::copy_out(self.inner(), statement).await
+    }
+
+    /// Executes a `COPY TO STDOUT` query, returning a stream of the resulting data.
+    pub async fn copy_out_simple(&self, query: &str) -> Result<CopyOutStream, Error> {
+        copy_out::copy_out_simple(self.inner(), query).await
+    }
+
+    /// Executes a CopyBoth query, returning a combined Stream+Sink type to read and write copy
+    /// data.
+    pub async fn copy_both_simple<T>(&self, query: &str) -> Result<CopyBothDuplex<T>, Error>
+    where
+        T: Buf + 'static + Send,
+    {
+        copy_both::copy_both_simple(self.inner(), query).await
     }
 
     /// Executes a sequence of SQL statements using the simple query protocol, returning the resulting rows.

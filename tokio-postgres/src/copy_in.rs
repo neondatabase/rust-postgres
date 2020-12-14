@@ -2,8 +2,8 @@ use crate::client::{InnerClient, Responses};
 use crate::codec::FrontendMessage;
 use crate::connection::RequestMessages;
 use crate::query::extract_row_affected;
-use crate::{Error, Statement, query, slice_iter};
-use bytes::{Buf, BufMut, BytesMut};
+use crate::{Error, Statement, query, simple_query, slice_iter};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use log::debug;
@@ -188,14 +188,10 @@ where
     }
 }
 
-pub async fn copy_in<T>(client: &InnerClient, statement: Statement) -> Result<CopyInSink<T>, Error>
+async fn start<T>(client: &InnerClient, buf: Bytes, simple: bool) -> Result<CopyInSink<T>, Error>
 where
     T: Buf + 'static + Send,
 {
-    debug!("executing copy in statement {}", statement.name());
-
-    let buf = query::encode(client, &statement, slice_iter(&[]))?;
-
     let (mut sender, receiver) = mpsc::channel(1);
     let receiver = CopyInReceiver::new(receiver);
     let mut responses = client.send(RequestMessages::CopyIn(receiver))?;
@@ -205,9 +201,11 @@ where
         .await
         .map_err(|_| Error::closed())?;
 
-    match responses.next().await? {
-        Message::BindComplete => {}
-        _ => return Err(Error::unexpected_message()),
+    if !simple {
+        match responses.next().await? {
+            Message::BindComplete => {}
+            _ => return Err(Error::unexpected_message()),
+        }
     }
 
     match responses.next().await? {
@@ -222,4 +220,24 @@ where
         state: SinkState::Active,
         _p2: PhantomData,
     })
+}
+
+pub async fn copy_in<T>(client: &InnerClient, statement: Statement) -> Result<CopyInSink<T>, Error>
+where
+    T: Buf + 'static + Send,
+{
+    debug!("executing copy in statement {}", statement.name());
+
+    let buf = query::encode(client, &statement, slice_iter(&[]))?;
+    start(client, buf, false).await
+}
+
+pub async fn copy_in_simple<T>(client: &InnerClient, query: &str) -> Result<CopyInSink<T>, Error>
+where
+    T: Buf + 'static + Send,
+{
+    debug!("executing copy in query {}", query);
+
+    let buf = simple_query::encode(client, query)?;
+    start(client, buf, true).await
 }
