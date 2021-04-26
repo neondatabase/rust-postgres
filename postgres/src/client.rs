@@ -1,6 +1,6 @@
 use crate::connection::Connection;
 use crate::{
-    CancelToken, Config, CopyInWriter, CopyOutReader, Notifications, RowIter, Statement,
+    CancelToken, Config, CopyBoth, CopyInWriter, CopyOutReader, Notifications, RowIter, Statement,
     ToStatement, Transaction, TransactionBuilder,
 };
 use std::task::Poll;
@@ -393,6 +393,15 @@ impl Client {
     {
         let stream = self.connection.block_on(self.client.copy_out(query))?;
         Ok(CopyOutReader::new(self.connection.as_ref(), stream))
+    }
+
+    /// Executes a CopyBoth query, returning a combined Stream+Sink type to read and write copy
+    /// data.
+    pub fn copy_both_simple(&mut self, query: &str) -> Result<CopyBoth<'_>, Error> {
+        let stream = self
+            .connection
+            .block_on(self.client.copy_both_simple(query))?;
+        Ok(CopyBoth::new(self.connection.as_ref(), stream))
     }
 
     /// Executes a sequence of SQL statements using the simple query protocol.

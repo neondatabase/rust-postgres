@@ -72,6 +72,7 @@ pub use tokio_postgres::{
 pub use crate::cancel_token::CancelToken;
 pub use crate::client::*;
 pub use crate::config::Config;
+pub use crate::copy_both::CopyBoth;
 pub use crate::copy_in_writer::CopyInWriter;
 pub use crate::copy_out_reader::CopyOutReader;
 #[doc(no_inline)]
@@ -92,14 +93,18 @@ mod cancel_token;
 mod client;
 pub mod config;
 mod connection;
+mod copy_both;
 mod copy_in_writer;
 mod copy_out_reader;
 mod generic_client;
 mod lazy_pin;
 pub mod notifications;
+pub mod replication;
 mod row_iter;
 mod transaction;
 mod transaction_builder;
 
+#[cfg(test)]
+mod replication_test;
 #[cfg(test)]
 mod test;

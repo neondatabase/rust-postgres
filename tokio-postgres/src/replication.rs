@@ -23,7 +23,7 @@ pin_project! {
     /// The replication *must* be explicitly completed via the `finish` method.
     pub struct ReplicationStream {
         #[pin]
-        stream: CopyBothDuplex<Bytes>,
+        pub(crate) stream: CopyBothDuplex<Bytes>,
     }
 }
 
