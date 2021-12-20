@@ -37,6 +37,12 @@ impl<'a> ReplicationIter<'a> {
         }
     }
 
+    /// Send zenith status update to server.
+    pub fn zenith_status_update(&mut self, len: u64, data: &[u8]) -> Result<(), Error> {
+        self.connection
+            .block_on(self.stream.pinned().zenith_status_update(len, data))
+    }
+
     /// Send standby update to server.
     pub fn standby_status_update(
         &mut self,
