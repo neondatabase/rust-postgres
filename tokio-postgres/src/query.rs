@@ -207,6 +207,17 @@ pin_project! {
     }
 }
 
+impl RowStream {
+    /// Creates a new `RowStream`.
+    pub fn new(statement: Statement, responses: Responses) -> Self {
+        RowStream {
+            statement,
+            responses,
+            _p: PhantomPinned,
+        }
+    }
+}
+
 impl Stream for RowStream {
     type Item = Result<Row, Error>;
 

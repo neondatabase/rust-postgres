@@ -252,6 +252,34 @@ async fn custom_array() {
 }
 
 #[tokio::test]
+async fn query_raw_txt() {
+    let client = connect("user=postgres").await;
+
+    let rows: Vec<tokio_postgres::Row> = client
+        .query_raw_txt("SELECT 55 * $1", ["42"])
+        .await
+        .unwrap()
+        .try_collect()
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 1);
+    let res: i32 = rows[0].as_text(0).unwrap().parse::<i32>().unwrap();
+    assert_eq!(res, 55 * 42);
+
+    let rows: Vec<tokio_postgres::Row> = client
+        .query_raw_txt("SELECT $1", ["42"])
+        .await
+        .unwrap()
+        .try_collect()
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].get::<_, &str>(0), "42");
+}
+
+#[tokio::test]
 async fn custom_composite() {
     let client = connect("user=postgres").await;
 
