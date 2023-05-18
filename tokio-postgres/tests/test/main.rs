@@ -264,7 +264,7 @@ async fn query_raw_txt() {
         .unwrap();
 
     assert_eq!(rows.len(), 1);
-    let res: i32 = rows[0].as_text(0).unwrap().parse::<i32>().unwrap();
+    let res: i32 = rows[0].as_text(0).unwrap().unwrap().parse::<i32>().unwrap();
     assert_eq!(res, 55 * 42);
 
     let rows: Vec<tokio_postgres::Row> = client
@@ -277,6 +277,25 @@ async fn query_raw_txt() {
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].get::<_, &str>(0), "42");
+}
+
+#[tokio::test]
+async fn command_tag() {
+    let client = connect("user=postgres").await;
+
+    let row_stream = client
+        .query_raw_txt("select unnest('{1,2,3}'::int[]);", [])
+        .await
+        .unwrap();
+
+    pin_mut!(row_stream);
+
+    let mut rows: Vec<tokio_postgres::Row> = Vec::new();
+    while let Some(row) = row_stream.next().await {
+        rows.push(row.unwrap());
+    }
+
+    assert_eq!(row_stream.command_tag(), Some("SELECT 3".to_string()));
 }
 
 #[tokio::test]
