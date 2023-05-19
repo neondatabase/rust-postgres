@@ -204,6 +204,11 @@ impl Row {
             Err(Error::from_sql(Box::new(WrongFormat {}), idx))
         }
     }
+
+    /// Row byte size
+    pub fn body_len(&self) -> usize {
+        self.body.buffer().len()
+    }
 }
 
 impl AsName for SimpleColumn {

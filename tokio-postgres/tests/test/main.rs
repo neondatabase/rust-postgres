@@ -277,6 +277,7 @@ async fn query_raw_txt() {
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].get::<_, &str>(0), "42");
+    assert!(rows[0].body_len() > 0);
 }
 
 #[tokio::test]
