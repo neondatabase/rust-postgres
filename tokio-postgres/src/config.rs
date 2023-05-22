@@ -599,6 +599,14 @@ impl Config {
                     self.replication_mode(mode);
                 }
             }
+            "max_backend_message_size" => {
+                let limit = value.parse::<usize>().map_err(|_| {
+                    Error::config_parse(Box::new(InvalidValue("max_backend_message_size")))
+                })?;
+                if limit > 0 {
+                    self.max_backend_message_size(limit);
+                }
+            }
             key => {
                 return Err(Error::config_parse(Box::new(UnknownOption(
                     key.to_string(),
