@@ -281,6 +281,30 @@ async fn query_raw_txt() {
 }
 
 #[tokio::test]
+async fn limit_max_backend_message_size() {
+    let client = connect("user=postgres max_backend_message_size=10000").await;
+    let small: Vec<tokio_postgres::Row> = client
+        .query_raw_txt("SELECT REPEAT('a', 20)", [])
+        .await
+        .unwrap()
+        .try_collect()
+        .await
+        .unwrap();
+
+    assert_eq!(small.len(), 1);
+    assert_eq!(small[0].as_text(0).unwrap().unwrap().len(), 20);
+
+    let large: Result<Vec<tokio_postgres::Row>, Error> = client
+        .query_raw_txt("SELECT REPEAT('a', 2000000)", [])
+        .await
+        .unwrap()
+        .try_collect()
+        .await;
+
+    assert!(large.is_err());
+}
+
+#[tokio::test]
 async fn command_tag() {
     let client = connect("user=postgres").await;
 
