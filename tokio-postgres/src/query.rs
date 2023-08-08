@@ -55,6 +55,7 @@ where
         statement,
         responses,
         command_tag: None,
+        status: None,
         output_format: Format::Binary,
         _p: PhantomPinned,
     })
@@ -108,6 +109,7 @@ where
         statement,
         responses,
         command_tag: None,
+        status: None,
         output_format: Format::Text,
         _p: PhantomPinned,
     })
@@ -130,6 +132,7 @@ pub async fn query_portal(
         statement: portal.statement().clone(),
         responses,
         command_tag: None,
+        status: None,
         output_format: Format::Binary,
         _p: PhantomPinned,
     })
@@ -263,6 +266,7 @@ pin_project! {
         responses: Responses,
         command_tag: Option<String>,
         output_format: Format,
+        status: Option<u8>,
         #[pin]
         _p: PhantomPinned,
     }
@@ -288,7 +292,10 @@ impl Stream for RowStream {
                         *this.command_tag = Some(tag.to_string());
                     }
                 }
-                Message::ReadyForQuery(_) => return Poll::Ready(None),
+                Message::ReadyForQuery(status) => {
+                    *this.status = Some(status.status());
+                    return Poll::Ready(None);
+                }
                 _ => return Poll::Ready(Some(Err(Error::unexpected_message()))),
             }
         }
@@ -301,5 +308,12 @@ impl RowStream {
     /// This is only available after the stream has been exhausted.
     pub fn command_tag(&self) -> Option<String> {
         self.command_tag.clone()
+    }
+
+    /// Returns if the connection is ready for querying, with the status of the connection.
+    ///
+    /// This might be available only after the stream has been exhausted.
+    pub fn ready_status(&self) -> Option<u8> {
+        self.status
     }
 }

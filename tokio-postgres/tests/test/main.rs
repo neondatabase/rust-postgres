@@ -354,6 +354,31 @@ async fn command_tag() {
 }
 
 #[tokio::test]
+async fn ready_for_query() {
+    let client = connect("user=postgres").await;
+
+    let row_stream = client
+        .query_raw_txt("START TRANSACTION", [] as [Option<&str>; 0])
+        .await
+        .unwrap();
+
+    pin_mut!(row_stream);
+    while row_stream.next().await.is_none() {}
+
+    assert_eq!(row_stream.ready_status(), Some(b'T'));
+
+    let row_stream = client
+        .query_raw_txt("ROLLBACK", [] as [Option<&str>; 0])
+        .await
+        .unwrap();
+
+    pin_mut!(row_stream);
+    while row_stream.next().await.is_none() {}
+
+    assert_eq!(row_stream.ready_status(), Some(b'I'));
+}
+
+#[tokio::test]
 async fn column_extras() {
     let client = connect("user=postgres").await;
 
