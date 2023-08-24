@@ -35,6 +35,7 @@ impl<'a> Transaction<'a> {
     pub fn commit(mut self) -> Result<(), Error> {
         self.connection
             .block_on(self.transaction.take().unwrap().commit())
+            .map(|_| ())
     }
 
     /// Rolls the transaction back, discarding all changes made within it.
@@ -43,6 +44,7 @@ impl<'a> Transaction<'a> {
     pub fn rollback(mut self) -> Result<(), Error> {
         self.connection
             .block_on(self.transaction.take().unwrap().rollback())
+            .map(|_| ())
     }
 
     /// Like `Client::prepare`.
@@ -193,6 +195,7 @@ impl<'a> Transaction<'a> {
     pub fn batch_execute(&mut self, query: &str) -> Result<(), Error> {
         self.connection
             .block_on(self.transaction.as_ref().unwrap().batch_execute(query))
+            .map(|_| ())
     }
 
     /// Like `Client::cancel_token`.

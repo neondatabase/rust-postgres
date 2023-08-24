@@ -439,7 +439,9 @@ impl Client {
     /// functionality to safely embed that data in the request. Do not form statements via string concatenation and pass
     /// them to this method!
     pub fn batch_execute(&mut self, query: &str) -> Result<(), Error> {
-        self.connection.block_on(self.client.batch_execute(query))
+        self.connection
+            .block_on(self.client.batch_execute(query))
+            .map(|_| ())
     }
 
     /// Begins a new database transaction.

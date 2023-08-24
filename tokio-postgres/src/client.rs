@@ -17,8 +17,8 @@ use crate::types::{Oid, ToSql, Type};
 use crate::Socket;
 use crate::{
     copy_both, copy_in, copy_out, prepare, query, simple_query, slice_iter, CancelToken,
-    CopyInSink, Error, Row, SimpleQueryMessage, Statement, ToStatement, Transaction,
-    TransactionBuilder,
+    CopyInSink, Error, ReadyForQueryStatus, Row, SimpleQueryMessage, Statement, ToStatement,
+    Transaction, TransactionBuilder,
 };
 use bytes::{Buf, BytesMut};
 use fallible_iterator::FallibleIterator;
@@ -526,7 +526,7 @@ impl Client {
     /// Prepared statements should be use for any query which contains user-specified data, as they provided the
     /// functionality to safely embed that data in the request. Do not form statements via string concatenation and pass
     /// them to this method!
-    pub async fn batch_execute(&self, query: &str) -> Result<(), Error> {
+    pub async fn batch_execute(&self, query: &str) -> Result<ReadyForQueryStatus, Error> {
         simple_query::batch_execute(self.inner(), query).await
     }
 
