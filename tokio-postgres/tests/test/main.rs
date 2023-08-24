@@ -16,7 +16,8 @@ use tokio_postgres::error::SqlState;
 use tokio_postgres::tls::{NoTls, NoTlsStream};
 use tokio_postgres::types::{Kind, Type};
 use tokio_postgres::{
-    AsyncMessage, Client, Config, Connection, Error, IsolationLevel, SimpleQueryMessage,
+    AsyncMessage, Client, Config, Connection, Error, IsolationLevel, ReadyForQueryStatus,
+    SimpleQueryMessage,
 };
 
 mod binary_copy;
@@ -365,7 +366,7 @@ async fn ready_for_query() {
     pin_mut!(row_stream);
     while row_stream.next().await.is_none() {}
 
-    assert_eq!(row_stream.ready_status(), Some(b'T'));
+    assert_eq!(row_stream.ready_status(), ReadyForQueryStatus::Transaction);
 
     let row_stream = client
         .query_raw_txt("ROLLBACK", [] as [Option<&str>; 0])
@@ -375,7 +376,7 @@ async fn ready_for_query() {
     pin_mut!(row_stream);
     while row_stream.next().await.is_none() {}
 
-    assert_eq!(row_stream.ready_status(), Some(b'I'));
+    assert_eq!(row_stream.ready_status(), ReadyForQueryStatus::Idle);
 }
 
 #[tokio::test]

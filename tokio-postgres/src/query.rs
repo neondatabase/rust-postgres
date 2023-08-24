@@ -2,7 +2,7 @@ use crate::client::{InnerClient, Responses};
 use crate::codec::FrontendMessage;
 use crate::connection::RequestMessages;
 use crate::types::{BorrowToSql, IsNull};
-use crate::{Error, Portal, Row, Statement};
+use crate::{Error, Portal, ReadyForQueryStatus, Row, Statement};
 use bytes::{BufMut, Bytes, BytesMut};
 use futures_util::{ready, Stream};
 use log::{debug, log_enabled, Level};
@@ -55,7 +55,7 @@ where
         statement,
         responses,
         command_tag: None,
-        status: None,
+        status: ReadyForQueryStatus::Unknown,
         output_format: Format::Binary,
         _p: PhantomPinned,
     })
@@ -109,7 +109,7 @@ where
         statement,
         responses,
         command_tag: None,
-        status: None,
+        status: ReadyForQueryStatus::Unknown,
         output_format: Format::Text,
         _p: PhantomPinned,
     })
@@ -132,7 +132,7 @@ pub async fn query_portal(
         statement: portal.statement().clone(),
         responses,
         command_tag: None,
-        status: None,
+        status: ReadyForQueryStatus::Unknown,
         output_format: Format::Binary,
         _p: PhantomPinned,
     })
@@ -266,7 +266,7 @@ pin_project! {
         responses: Responses,
         command_tag: Option<String>,
         output_format: Format,
-        status: Option<u8>,
+        status: ReadyForQueryStatus,
         #[pin]
         _p: PhantomPinned,
     }
@@ -293,7 +293,7 @@ impl Stream for RowStream {
                     }
                 }
                 Message::ReadyForQuery(status) => {
-                    *this.status = Some(status.status());
+                    *this.status = status.into();
                     return Poll::Ready(None);
                 }
                 _ => return Poll::Ready(Some(Err(Error::unexpected_message()))),
@@ -313,7 +313,7 @@ impl RowStream {
     /// Returns if the connection is ready for querying, with the status of the connection.
     ///
     /// This might be available only after the stream has been exhausted.
-    pub fn ready_status(&self) -> Option<u8> {
+    pub fn ready_status(&self) -> ReadyForQueryStatus {
         self.status
     }
 }

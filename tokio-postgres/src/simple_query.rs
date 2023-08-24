@@ -1,7 +1,7 @@
 use crate::client::{InnerClient, Responses};
 use crate::codec::FrontendMessage;
 use crate::connection::RequestMessages;
-use crate::{Error, SimpleQueryMessage, SimpleQueryRow};
+use crate::{Error, ReadyForQueryStatus, SimpleQueryMessage, SimpleQueryRow};
 use bytes::Bytes;
 use fallible_iterator::FallibleIterator;
 use futures_util::{ready, Stream};
@@ -40,11 +40,15 @@ pub async fn simple_query(client: &InnerClient, query: &str) -> Result<SimpleQue
     Ok(SimpleQueryStream {
         responses,
         columns: None,
+        status: ReadyForQueryStatus::Unknown,
         _p: PhantomPinned,
     })
 }
 
-pub async fn batch_execute(client: &InnerClient, query: &str) -> Result<(), Error> {
+pub async fn batch_execute(
+    client: &InnerClient,
+    query: &str,
+) -> Result<ReadyForQueryStatus, Error> {
     debug!("executing statement batch: {}", query);
 
     let buf = encode(client, query)?;
@@ -52,7 +56,7 @@ pub async fn batch_execute(client: &InnerClient, query: &str) -> Result<(), Erro
 
     loop {
         match responses.next().await? {
-            Message::ReadyForQuery(_) => return Ok(()),
+            Message::ReadyForQuery(status) => return Ok(status.into()),
             Message::CommandComplete(_)
             | Message::EmptyQueryResponse
             | Message::RowDescription(_)
@@ -74,8 +78,18 @@ pin_project! {
     pub struct SimpleQueryStream {
         responses: Responses,
         columns: Option<Arc<[SimpleColumn]>>,
+        status: ReadyForQueryStatus,
         #[pin]
         _p: PhantomPinned,
+    }
+}
+
+impl SimpleQueryStream {
+    /// Returns if the connection is ready for querying, with the status of the connection.
+    ///
+    /// This might be available only after the stream has been exhausted.
+    pub fn ready_status(&self) -> ReadyForQueryStatus {
+        self.status
     }
 }
 
@@ -117,7 +131,10 @@ impl Stream for SimpleQueryStream {
                     };
                     return Poll::Ready(Some(Ok(SimpleQueryMessage::Row(row))));
                 }
-                Message::ReadyForQuery(_) => return Poll::Ready(None),
+                Message::ReadyForQuery(s) => {
+                    *this.status = s.into();
+                    return Poll::Ready(None);
+                }
                 _ => return Poll::Ready(Some(Err(Error::unexpected_message()))),
             }
         }

@@ -9,8 +9,8 @@ use crate::types::{BorrowToSql, ToSql, Type};
 #[cfg(feature = "runtime")]
 use crate::Socket;
 use crate::{
-    bind, query, slice_iter, CancelToken, Client, CopyInSink, Error, Portal, Row,
-    SimpleQueryMessage, Statement, ToStatement,
+    bind, query, slice_iter, CancelToken, Client, CopyInSink, Error, Portal, ReadyForQueryStatus,
+    Row, SimpleQueryMessage, Statement, ToStatement,
 };
 use bytes::Buf;
 use futures_util::TryStreamExt;
@@ -65,7 +65,7 @@ impl<'a> Transaction<'a> {
     }
 
     /// Consumes the transaction, committing all changes made within it.
-    pub async fn commit(mut self) -> Result<(), Error> {
+    pub async fn commit(mut self) -> Result<ReadyForQueryStatus, Error> {
         self.done = true;
         let query = if let Some(sp) = self.savepoint.as_ref() {
             format!("RELEASE {}", sp.name)
@@ -78,7 +78,7 @@ impl<'a> Transaction<'a> {
     /// Rolls the transaction back, discarding all changes made within it.
     ///
     /// This is equivalent to `Transaction`'s `Drop` implementation, but provides any error encountered to the caller.
-    pub async fn rollback(mut self) -> Result<(), Error> {
+    pub async fn rollback(mut self) -> Result<ReadyForQueryStatus, Error> {
         self.done = true;
         let query = if let Some(sp) = self.savepoint.as_ref() {
             format!("ROLLBACK TO {}", sp.name)
@@ -261,7 +261,7 @@ impl<'a> Transaction<'a> {
     }
 
     /// Like `Client::batch_execute`.
-    pub async fn batch_execute(&self, query: &str) -> Result<(), Error> {
+    pub async fn batch_execute(&self, query: &str) -> Result<ReadyForQueryStatus, Error> {
         self.client.batch_execute(query).await
     }
 
