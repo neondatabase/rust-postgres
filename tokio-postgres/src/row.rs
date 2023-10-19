@@ -191,7 +191,7 @@ impl Row {
 
     /// Get the raw bytes for the column at the given index.
     fn col_buffer(&self, idx: usize) -> Option<&[u8]> {
-        let range = self.ranges[idx].to_owned()?;
+        let range = self.ranges.get(idx)?.to_owned()?;
         Some(&self.body.buffer()[range])
     }
 
