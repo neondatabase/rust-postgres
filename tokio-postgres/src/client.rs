@@ -622,6 +622,11 @@ impl Client {
         self.inner().clear_type_cache();
     }
 
+    /// Query for type information
+    pub async fn get_type(&self, oid: Oid) -> Result<Type, Error> {
+        crate::prepare::get_type(&self.inner, oid).await
+    }
+
     /// Determines if the connection to the server has already closed.
     ///
     /// In that case, all future queries will fail.
