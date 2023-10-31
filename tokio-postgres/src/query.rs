@@ -351,6 +351,11 @@ impl Stream for RowStream {
 }
 
 impl RowStream {
+    /// Returns information about the columns of data in the row.
+    pub fn columns(&self) -> &[Column] {
+        self.statement.columns()
+    }
+
     /// Returns the command tag of this query.
     ///
     /// This is only available after the stream has been exhausted.
