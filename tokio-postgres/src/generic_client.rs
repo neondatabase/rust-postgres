@@ -2,6 +2,7 @@ use crate::query::RowStream;
 use crate::types::{BorrowToSql, ToSql, Type};
 use crate::{Client, Error, Row, Statement, ToStatement, Transaction};
 use async_trait::async_trait;
+use postgres_protocol::Oid;
 
 mod private {
     pub trait Sealed {}
@@ -75,6 +76,9 @@ pub trait GenericClient: private::Sealed {
 
     /// Like `Client::transaction`.
     async fn transaction(&mut self) -> Result<Transaction<'_>, Error>;
+
+    /// Query for type information
+    async fn get_type(&self, oid: Oid) -> Result<Type, Error>;
 
     /// Returns a reference to the underlying `Client`.
     fn client(&self) -> &Client;
@@ -163,6 +167,11 @@ impl GenericClient for Client {
 
     async fn transaction(&mut self) -> Result<Transaction<'_>, Error> {
         self.transaction().await
+    }
+
+    /// Query for type information
+    async fn get_type(&self, oid: Oid) -> Result<Type, Error> {
+        self.get_type(oid).await
     }
 
     fn client(&self) -> &Client {
@@ -255,6 +264,11 @@ impl GenericClient for Transaction<'_> {
     #[allow(clippy::needless_lifetimes)]
     async fn transaction<'a>(&'a mut self) -> Result<Transaction<'a>, Error> {
         self.transaction().await
+    }
+
+    /// Query for type information
+    async fn get_type(&self, oid: Oid) -> Result<Type, Error> {
+        self.client().get_type(oid).await
     }
 
     fn client(&self) -> &Client {
