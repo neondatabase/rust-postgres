@@ -57,13 +57,8 @@ pub trait GenericClient: private::Sealed {
         I::IntoIter: ExactSizeIterator;
 
     /// Like `Client::query_raw_txt`.
-    async fn query_raw_txt<'a, T, S, I>(
-        &self,
-        statement: &T,
-        params: I,
-    ) -> Result<RowStream, Error>
+    async fn query_raw_txt<S, I>(&self, statement: &str, params: I) -> Result<RowStream, Error>
     where
-        T: ?Sized + ToStatement + Sync + Send,
         S: AsRef<str> + Sync + Send,
         I: IntoIterator<Item = Option<S>> + Sync + Send,
         I::IntoIter: ExactSizeIterator + Sync + Send;
@@ -145,9 +140,8 @@ impl GenericClient for Client {
         self.query_raw(statement, params).await
     }
 
-    async fn query_raw_txt<'a, T, S, I>(&self, statement: &T, params: I) -> Result<RowStream, Error>
+    async fn query_raw_txt<S, I>(&self, statement: &str, params: I) -> Result<RowStream, Error>
     where
-        T: ?Sized + ToStatement + Sync + Send,
         S: AsRef<str> + Sync + Send,
         I: IntoIterator<Item = Option<S>> + Sync + Send,
         I::IntoIter: ExactSizeIterator + Sync + Send,
@@ -237,9 +231,8 @@ impl GenericClient for Transaction<'_> {
         self.query_raw(statement, params).await
     }
 
-    async fn query_raw_txt<'a, T, S, I>(&self, statement: &T, params: I) -> Result<RowStream, Error>
+    async fn query_raw_txt<S, I>(&self, statement: &str, params: I) -> Result<RowStream, Error>
     where
-        T: ?Sized + ToStatement + Sync + Send,
         S: AsRef<str> + Sync + Send,
         I: IntoIterator<Item = Option<S>> + Sync + Send,
         I::IntoIter: ExactSizeIterator + Sync + Send,

@@ -2,14 +2,15 @@ use crate::client::{InnerClient, Responses};
 use crate::codec::FrontendMessage;
 use crate::connection::RequestMessages;
 use crate::types::{BorrowToSql, IsNull};
-use crate::{Error, Portal, ReadyForQueryStatus, Row, Statement};
+use crate::{Column, Error, Portal, ReadyForQueryStatus, Row, Statement};
 use bytes::{BufMut, Bytes, BytesMut};
+use fallible_iterator::FallibleIterator;
 use futures_util::{ready, Stream};
 use log::{debug, log_enabled, Level};
 use pin_project_lite::pin_project;
 use postgres_protocol::message::backend::Message;
 use postgres_protocol::message::frontend;
-use postgres_types::Format;
+use postgres_types::{Format, Type};
 use std::fmt;
 use std::marker::PhantomPinned;
 use std::pin::Pin;
@@ -63,7 +64,7 @@ where
 
 pub async fn query_txt<S, I>(
     client: &Arc<InnerClient>,
-    statement: Statement,
+    query: &str,
     params: I,
 ) -> Result<RowStream, Error>
 where
@@ -74,10 +75,18 @@ where
     let params = params.into_iter();
 
     let buf = client.with_buf(|buf| {
+        frontend::parse(
+            "",                 // unnamed prepared statement
+            query,              // query to parse
+            std::iter::empty(), // give no type info
+            buf,
+        )
+        .map_err(Error::encode)?;
+        frontend::describe(b'S', "", buf).map_err(Error::encode)?;
         // Bind, pass params as text, retrieve as binary
         match frontend::bind(
             "",                 // empty string selects the unnamed portal
-            statement.name(),   // named prepared statement
+            "",                 // unnamed prepared statement
             std::iter::empty(), // all parameters use the default format (text)
             params,
             |param, buf| match param {
@@ -104,9 +113,48 @@ where
     })?;
 
     // now read the responses
-    let responses = start(client, buf).await?;
+    let mut responses = client.send(RequestMessages::Single(FrontendMessage::Raw(buf)))?;
+
+    match responses.next().await? {
+        Message::ParseComplete => {}
+        _ => return Err(Error::unexpected_message()),
+    }
+
+    let parameter_description = match responses.next().await? {
+        Message::ParameterDescription(body) => body,
+        _ => return Err(Error::unexpected_message()),
+    };
+
+    let row_description = match responses.next().await? {
+        Message::RowDescription(body) => Some(body),
+        Message::NoData => None,
+        _ => return Err(Error::unexpected_message()),
+    };
+
+    match responses.next().await? {
+        Message::BindComplete => {}
+        _ => return Err(Error::unexpected_message()),
+    }
+
+    let mut parameters = vec![];
+    let mut it = parameter_description.parameters();
+    while let Some(oid) = it.next().map_err(Error::parse)? {
+        let type_ = Type::from_oid(oid).unwrap_or(Type::UNKNOWN);
+        parameters.push(type_);
+    }
+
+    let mut columns = vec![];
+    if let Some(row_description) = row_description {
+        let mut it = row_description.fields();
+        while let Some(field) = it.next().map_err(Error::parse)? {
+            let type_ = Type::from_oid(field.type_oid()).unwrap_or(Type::UNKNOWN);
+            let column = Column::new(field.name().to_string(), type_, field);
+            columns.push(column);
+        }
+    }
+
     Ok(RowStream {
-        statement,
+        statement: Statement::new_anonymous(parameters, columns),
         responses,
         command_tag: None,
         status: ReadyForQueryStatus::Unknown,

@@ -52,6 +52,15 @@ impl Statement {
         }))
     }
 
+    pub(crate) fn new_anonymous(params: Vec<Type>, columns: Vec<Column>) -> Statement {
+        Statement(Arc::new(StatementInner {
+            client: Weak::new(),
+            name: String::new(),
+            params,
+            columns,
+        }))
+    }
+
     pub(crate) fn name(&self) -> &str {
         &self.0.name
     }

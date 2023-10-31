@@ -150,9 +150,8 @@ impl<'a> Transaction<'a> {
     }
 
     /// Like `Client::query_raw_txt`.
-    pub async fn query_raw_txt<T, S, I>(&self, statement: &T, params: I) -> Result<RowStream, Error>
+    pub async fn query_raw_txt<S, I>(&self, statement: &str, params: I) -> Result<RowStream, Error>
     where
-        T: ?Sized + ToStatement,
         S: AsRef<str>,
         I: IntoIterator<Item = Option<S>>,
         I::IntoIter: ExactSizeIterator,

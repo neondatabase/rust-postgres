@@ -376,18 +376,16 @@ impl Client {
 
     /// Pass text directly to the Postgres backend to allow it to sort out typing itself and
     /// to save a roundtrip
-    pub async fn query_raw_txt<'a, T, S, I>(
+    pub async fn query_raw_txt<S, I>(
         &self,
-        statement: &T,
+        statement: &str,
         params: I,
     ) -> Result<RowStream, Error>
     where
-        T: ?Sized + ToStatement,
         S: AsRef<str>,
         I: IntoIterator<Item = Option<S>>,
         I::IntoIter: ExactSizeIterator,
     {
-        let statement = statement.__convert().into_statement(self).await?;
         query::query_txt(&self.inner, statement, params).await
     }
 
