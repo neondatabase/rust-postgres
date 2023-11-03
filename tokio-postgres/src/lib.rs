@@ -122,6 +122,7 @@ pub use crate::cancel_token::CancelToken;
 pub use crate::client::Client;
 pub use crate::config::Config;
 pub use crate::connection::Connection;
+pub use crate::copy_both::CopyBothDuplex;
 pub use crate::copy_in::CopyInSink;
 pub use crate::copy_out::CopyOutStream;
 use crate::error::DbError;
