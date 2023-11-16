@@ -196,7 +196,7 @@ impl Client {
     }
 
     /// Returns process_id.
-    pub fn get_process_id(self) -> i32 {
+    pub fn get_process_id(&self) -> i32 {
         self.process_id
     }
 
