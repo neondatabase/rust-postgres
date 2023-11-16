@@ -195,6 +195,10 @@ impl Client {
         }
     }
 
+    pub fn get_process_id(self) -> i32 {
+        self.process_id
+    }
+
     pub(crate) fn inner(&self) -> &Arc<InnerClient> {
         &self.inner
     }
