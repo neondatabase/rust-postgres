@@ -24,16 +24,19 @@ const SCRAM_DEFAULT_SALT_LEN: usize = 16;
 ///
 /// The client may assume the returned string doesn't contain any
 /// special characters that would require escaping in an SQL command.
-pub fn scram_sha_256(password: &[u8]) -> String {
+pub async fn scram_sha_256(password: &[u8]) -> String {
     let mut salt: [u8; SCRAM_DEFAULT_SALT_LEN] = [0; SCRAM_DEFAULT_SALT_LEN];
     let mut rng = rand::thread_rng();
     rng.fill_bytes(&mut salt);
-    scram_sha_256_salt(password, salt)
+    scram_sha_256_salt(password, salt).await
 }
 
 // Internal implementation of scram_sha_256 with a caller-provided
 // salt. This is useful for testing.
-pub(crate) fn scram_sha_256_salt(password: &[u8], salt: [u8; SCRAM_DEFAULT_SALT_LEN]) -> String {
+pub(crate) async fn scram_sha_256_salt(
+    password: &[u8],
+    salt: [u8; SCRAM_DEFAULT_SALT_LEN],
+) -> String {
     // Prepare the password, per [RFC
     // 4013](https://tools.ietf.org/html/rfc4013), if possible.
     //
@@ -58,7 +61,7 @@ pub(crate) fn scram_sha_256_salt(password: &[u8], salt: [u8; SCRAM_DEFAULT_SALT_
     };
 
     // salt password
-    let salted_password = sasl::hi(&prepared, &salt, SCRAM_DEFAULT_ITERATIONS);
+    let salted_password = sasl::hi(&prepared, &salt, SCRAM_DEFAULT_ITERATIONS).await;
 
     // client key
     let mut hmac = Hmac::<Sha256>::new_from_slice(&salted_password)

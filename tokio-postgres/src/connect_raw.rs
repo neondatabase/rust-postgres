@@ -300,6 +300,7 @@ where
 
     scram
         .update(body.data())
+        .await
         .map_err(|e| Error::authentication(e.into()))?;
 
     let mut buf = BytesMut::new();
