@@ -486,8 +486,8 @@ async fn simple_query() {
     }
     match &messages[2] {
         SimpleQueryMessage::Row(row) => {
-            assert_eq!(row.columns().get(0).map(|c| c.name()), Some("id"));
-            assert_eq!(row.columns().get(1).map(|c| c.name()), Some("name"));
+            assert_eq!(row.columns()[0].name(), "id");
+            assert_eq!(row.columns()[1].name(), "name");
             assert_eq!(row.get(0), Some("1"));
             assert_eq!(row.get(1), Some("steven"));
         }
@@ -495,8 +495,8 @@ async fn simple_query() {
     }
     match &messages[3] {
         SimpleQueryMessage::Row(row) => {
-            assert_eq!(row.columns().get(0).map(|c| c.name()), Some("id"));
-            assert_eq!(row.columns().get(1).map(|c| c.name()), Some("name"));
+            assert_eq!(row.columns()[0].name(), "id");
+            assert_eq!(row.columns()[1].name(), "name");
             assert_eq!(row.get(0), Some("2"));
             assert_eq!(row.get(1), Some("joe"));
         }
