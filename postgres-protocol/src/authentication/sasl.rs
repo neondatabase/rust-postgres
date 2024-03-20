@@ -50,8 +50,9 @@ pub(crate) async fn hi(str: &[u8], salt: &[u8], i: u32) -> [u8; 32] {
         for (hi, prev) in hi.iter_mut().zip(prev) {
             *hi ^= prev;
         }
-        // yield every ~1ms
-        if i % 4096 == 0 {
+        // yield every ~250us
+        // hopefully reduces tail latencies
+        if i % 1024 == 0 {
             yield_now().await
         }
     }
