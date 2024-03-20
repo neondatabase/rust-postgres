@@ -111,7 +111,7 @@ impl<'a> FromSql<'a> for NaiveDate {
         let jd = types::date_from_sql(raw)?;
         base()
             .date()
-            .checked_add_signed(Duration::days(i64::from(jd)))
+            .checked_add_signed(Duration::try_days(i64::from(jd)).unwrap())
             .ok_or_else(|| "value too large to decode".into())
     }
 

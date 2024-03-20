@@ -9,6 +9,7 @@ use std::io;
 use std::iter;
 use std::mem;
 use std::str;
+use tokio::task::yield_now;
 
 const NONCE_LENGTH: usize = 24;
 
@@ -32,7 +33,7 @@ fn normalize(pass: &[u8]) -> Vec<u8> {
     }
 }
 
-pub(crate) fn hi(str: &[u8], salt: &[u8], i: u32) -> [u8; 32] {
+pub(crate) async fn hi(str: &[u8], salt: &[u8], iterations: u32) -> [u8; 32] {
     let mut hmac =
         Hmac::<Sha256>::new_from_slice(str).expect("HMAC is able to accept all key sizes");
     hmac.update(salt);
@@ -41,13 +42,18 @@ pub(crate) fn hi(str: &[u8], salt: &[u8], i: u32) -> [u8; 32] {
 
     let mut hi = prev;
 
-    for _ in 1..i {
+    for i in 1..iterations {
         let mut hmac = Hmac::<Sha256>::new_from_slice(str).expect("already checked above");
         hmac.update(&prev);
         prev = hmac.finalize().into_bytes();
 
         for (hi, prev) in hi.iter_mut().zip(prev) {
             *hi ^= prev;
+        }
+        // yield every ~250us
+        // hopefully reduces tail latencies
+        if i % 1024 == 0 {
+            yield_now().await
         }
     }
 
@@ -200,7 +206,7 @@ impl ScramSha256 {
     /// Updates the state machine with the response from the backend.
     ///
     /// This should be called when an `AuthenticationSASLContinue` message is received.
-    pub fn update(&mut self, message: &[u8]) -> io::Result<()> {
+    pub async fn update(&mut self, message: &[u8]) -> io::Result<()> {
         let (client_nonce, password, channel_binding) =
             match mem::replace(&mut self.state, State::Done) {
                 State::Update {
@@ -227,7 +233,7 @@ impl ScramSha256 {
                     Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
                 };
 
-                let salted_password = hi(&password, &salt, parsed.iteration_count);
+                let salted_password = hi(&password, &salt, parsed.iteration_count).await;
 
                 let make_key = |name| {
                     let mut hmac = Hmac::<Sha256>::new_from_slice(&salted_password)
@@ -481,8 +487,8 @@ mod test {
     }
 
     // recorded auth exchange from psql
-    #[test]
-    fn exchange() {
+    #[tokio::test]
+    async fn exchange() {
         let password = "foobar";
         let nonce = "9IZ2O01zb9IgiIZ1WJ/zgpJB";
 
@@ -502,7 +508,7 @@ mod test {
         );
         assert_eq!(str::from_utf8(scram.message()).unwrap(), client_first);
 
-        scram.update(server_first.as_bytes()).unwrap();
+        scram.update(server_first.as_bytes()).await.unwrap();
         assert_eq!(str::from_utf8(scram.message()).unwrap(), client_final);
 
         scram.finish(server_final.as_bytes()).unwrap();
