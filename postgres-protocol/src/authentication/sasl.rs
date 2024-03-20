@@ -33,7 +33,7 @@ fn normalize(pass: &[u8]) -> Vec<u8> {
     }
 }
 
-pub(crate) async fn hi(str: &[u8], salt: &[u8], i: u32) -> [u8; 32] {
+pub(crate) async fn hi(str: &[u8], salt: &[u8], iterations: u32) -> [u8; 32] {
     let mut hmac =
         Hmac::<Sha256>::new_from_slice(str).expect("HMAC is able to accept all key sizes");
     hmac.update(salt);
@@ -42,7 +42,7 @@ pub(crate) async fn hi(str: &[u8], salt: &[u8], i: u32) -> [u8; 32] {
 
     let mut hi = prev;
 
-    for _ in 1..i {
+    for i in 1..iterations {
         let mut hmac = Hmac::<Sha256>::new_from_slice(str).expect("already checked above");
         hmac.update(&prev);
         prev = hmac.finalize().into_bytes();
