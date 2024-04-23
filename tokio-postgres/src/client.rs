@@ -205,7 +205,7 @@ impl Client {
     }
 
     #[cfg(feature = "runtime")]
-    pub(crate) fn set_socket_config(&mut self, socket_config: SocketConfig) {
+    pub fn set_socket_config(&mut self, socket_config: SocketConfig) {
         self.socket_config = Some(socket_config);
     }
 
