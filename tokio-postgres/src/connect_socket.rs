@@ -4,11 +4,29 @@ use crate::{Error, Socket};
 use socket2::{SockRef, TcpKeepalive};
 use std::future::Future;
 use std::io;
+use std::net::SocketAddr;
 use std::time::Duration;
 #[cfg(unix)]
 use tokio::net::UnixStream;
 use tokio::net::{self, TcpStream};
 use tokio::time;
+
+pub(crate) async fn connect_socket_addr(
+    socket: SocketAddr,
+    connect_timeout: Option<Duration>,
+    keepalive_config: Option<&KeepaliveConfig>,
+) -> Result<Socket, Error> {
+    let stream = connect_with_timeout(TcpStream::connect(socket), connect_timeout).await?;
+
+    stream.set_nodelay(true).map_err(Error::connect)?;
+    if let Some(keepalive_config) = keepalive_config {
+        SockRef::from(&stream)
+            .set_tcp_keepalive(&TcpKeepalive::from(keepalive_config))
+            .map_err(Error::connect)?;
+    }
+
+    Ok(Socket::new_tcp(stream))
+}
 
 pub(crate) async fn connect_socket(
     host: &Host,

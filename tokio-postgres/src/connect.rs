@@ -72,6 +72,7 @@ where
         },
     )
     .await?;
+    let socket_addr = socket.peer_addr().map_err(Error::io)?;
     let (mut client, mut connection) = connect_raw(socket, tls, config).await?;
 
     if let TargetSessionAttrs::ReadWrite = config.target_session_attrs {
@@ -116,7 +117,7 @@ where
 
     client.set_socket_config(SocketConfig {
         host: host.clone(),
-        port,
+        socket_addr,
         connect_timeout: config.connect_timeout,
         keepalive: if config.keepalives {
             Some(config.keepalive_config.clone())

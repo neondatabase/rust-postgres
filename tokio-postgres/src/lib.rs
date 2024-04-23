@@ -121,7 +121,7 @@
 use postgres_protocol::message::backend::ReadyForQueryBody;
 
 pub use crate::cancel_token::CancelToken;
-pub use crate::client::Client;
+pub use crate::client::{Client, SocketConfig};
 pub use crate::config::Config;
 pub use crate::connection::Connection;
 pub use crate::copy_both::CopyBothDuplex;

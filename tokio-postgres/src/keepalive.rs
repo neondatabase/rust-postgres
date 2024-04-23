@@ -2,7 +2,7 @@ use socket2::TcpKeepalive;
 use std::time::Duration;
 
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) struct KeepaliveConfig {
+pub struct KeepaliveConfig {
     pub idle: Duration,
     pub interval: Option<Duration>,
     pub retries: Option<u32>,

@@ -29,6 +29,7 @@ use postgres_protocol::message::{backend::Message, frontend};
 use postgres_types::BorrowToSql;
 use std::collections::HashMap;
 use std::fmt;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 #[cfg(feature = "runtime")]
@@ -154,9 +155,9 @@ impl InnerClient {
 
 #[cfg(feature = "runtime")]
 #[derive(Clone)]
-pub(crate) struct SocketConfig {
+pub struct SocketConfig {
     pub host: Host,
-    pub port: u16,
+    pub socket_addr: SocketAddr,
     pub connect_timeout: Option<Duration>,
     pub keepalive: Option<KeepaliveConfig>,
 }
