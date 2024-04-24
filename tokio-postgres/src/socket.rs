@@ -1,5 +1,4 @@
 use std::io;
-use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -20,6 +19,12 @@ enum Inner {
 #[derive(Debug)]
 pub struct Socket(Inner);
 
+#[derive(Debug, Clone)]
+pub enum SocketAddr {
+    Tcp(std::net::SocketAddr),
+    Unix,
+}
+
 impl Socket {
     pub(crate) fn new_tcp(stream: TcpStream) -> Socket {
         Socket(Inner::Tcp(stream))
@@ -32,11 +37,8 @@ impl Socket {
 
     pub(crate) fn peer_addr(&self) -> std::io::Result<SocketAddr> {
         match &self.0 {
-            Inner::Tcp(tcp) => tcp.peer_addr(),
-            Inner::Unix(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::AddrNotAvailable,
-                "not available for unix socket",
-            )),
+            Inner::Tcp(tcp) => tcp.peer_addr().map(SocketAddr::Tcp),
+            Inner::Unix(_) => Ok(SocketAddr::Unix),
         }
     }
 }

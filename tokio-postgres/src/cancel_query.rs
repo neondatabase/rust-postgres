@@ -35,6 +35,8 @@ where
         .map_err(|e| Error::tls(e.into()))?;
 
     let socket = connect_socket::connect_socket_addr(
+        &config.host,
+        config.port,
         config.socket_addr,
         config.connect_timeout,
         config.keepalive.as_ref(),

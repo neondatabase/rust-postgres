@@ -117,6 +117,7 @@ where
 
     client.set_socket_config(SocketConfig {
         host: host.clone(),
+        port,
         socket_addr,
         connect_timeout: config.connect_timeout,
         keepalive: if config.keepalives {

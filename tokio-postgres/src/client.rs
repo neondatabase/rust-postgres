@@ -9,6 +9,7 @@ use crate::copy_out::CopyOutStream;
 use crate::keepalive::KeepaliveConfig;
 use crate::query::RowStream;
 use crate::simple_query::SimpleQueryStream;
+use crate::socket::SocketAddr;
 #[cfg(feature = "runtime")]
 use crate::tls::MakeTlsConnect;
 use crate::tls::TlsConnect;
@@ -29,7 +30,6 @@ use postgres_protocol::message::{backend::Message, frontend};
 use postgres_types::BorrowToSql;
 use std::collections::HashMap;
 use std::fmt;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 #[cfg(feature = "runtime")]
@@ -157,6 +157,7 @@ impl InnerClient {
 #[derive(Clone)]
 pub struct SocketConfig {
     pub host: Host,
+    pub port: u16,
     pub socket_addr: SocketAddr,
     pub connect_timeout: Option<Duration>,
     pub keepalive: Option<KeepaliveConfig>,

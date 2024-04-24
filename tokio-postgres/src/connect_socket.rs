@@ -1,10 +1,9 @@
 use crate::config::Host;
 use crate::keepalive::KeepaliveConfig;
-use crate::{Error, Socket};
+use crate::{Error, Socket, SocketAddr};
 use socket2::{SockRef, TcpKeepalive};
 use std::future::Future;
 use std::io;
-use std::net::SocketAddr;
 use std::time::Duration;
 #[cfg(unix)]
 use tokio::net::UnixStream;
@@ -12,20 +11,34 @@ use tokio::net::{self, TcpStream};
 use tokio::time;
 
 pub(crate) async fn connect_socket_addr(
+    host: &Host,
+    port: u16,
     socket: SocketAddr,
     connect_timeout: Option<Duration>,
     keepalive_config: Option<&KeepaliveConfig>,
 ) -> Result<Socket, Error> {
-    let stream = connect_with_timeout(TcpStream::connect(socket), connect_timeout).await?;
+    match socket {
+        SocketAddr::Tcp(socket) => {
+            let stream = connect_with_timeout(TcpStream::connect(socket), connect_timeout).await?;
 
-    stream.set_nodelay(true).map_err(Error::connect)?;
-    if let Some(keepalive_config) = keepalive_config {
-        SockRef::from(&stream)
-            .set_tcp_keepalive(&TcpKeepalive::from(keepalive_config))
-            .map_err(Error::connect)?;
+            stream.set_nodelay(true).map_err(Error::connect)?;
+            if let Some(keepalive_config) = keepalive_config {
+                SockRef::from(&stream)
+                    .set_tcp_keepalive(&TcpKeepalive::from(keepalive_config))
+                    .map_err(Error::connect)?;
+            }
+            Ok(Socket::new_tcp(stream))
+        }
+        SocketAddr::Unix => match host {
+            Host::Tcp(_) => unreachable!(),
+            Host::Unix(path) => {
+                let path = path.join(format!(".s.PGSQL.{}", port));
+                let socket =
+                    connect_with_timeout(UnixStream::connect(path), connect_timeout).await?;
+                Ok(Socket::new_unix(socket))
+            }
+        },
     }
-
-    Ok(Socket::new_tcp(stream))
 }
 
 pub(crate) async fn connect_socket(
