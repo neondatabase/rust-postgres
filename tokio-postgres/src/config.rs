@@ -171,8 +171,7 @@ pub enum AuthKeys {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Config {
     pub(crate) user: Option<String>,
-    pub(crate) password: Option<Vec<u8>>,
-    pub(crate) auth_keys: Option<Box<AuthKeys>>,
+    pub(crate) auth: Option<Auth>,
     pub(crate) dbname: Option<String>,
     pub(crate) options: Option<String>,
     pub(crate) application_name: Option<String>,
@@ -186,6 +185,13 @@ pub struct Config {
     pub(crate) channel_binding: ChannelBinding,
     pub(crate) replication_mode: Option<ReplicationMode>,
     pub(crate) max_backend_message_size: Option<usize>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Auth {
+    Password(Vec<u8>),
+    AuthKeys(AuthKeys),
 }
 
 impl Default for Config {
@@ -204,8 +210,7 @@ impl Config {
         };
         Config {
             user: None,
-            password: None,
-            auth_keys: None,
+            auth: None,
             dbname: None,
             options: None,
             application_name: None,
@@ -241,28 +246,30 @@ impl Config {
     where
         T: AsRef<[u8]>,
     {
-        self.password = Some(password.as_ref().to_vec());
+        self.auth = Some(Auth::Password(password.as_ref().to_vec()));
         self
     }
 
     /// Gets the password to authenticate with, if one has been configured with
     /// the `password` method.
-    pub fn get_password(&self) -> Option<&[u8]> {
-        self.password.as_deref()
+    pub fn get_auth(&self) -> Option<Auth> {
+        self.auth.clone()
+    }
+
+    /// Sets precomputed protocol-specific keys to authenticate with.
+    /// When set, this option will override `password`.
+    /// See [`AuthKeys`] for more information.
+    pub fn auth(&mut self, keys: Auth) -> &mut Config {
+        self.auth = Some(keys);
+        self
     }
 
     /// Sets precomputed protocol-specific keys to authenticate with.
     /// When set, this option will override `password`.
     /// See [`AuthKeys`] for more information.
     pub fn auth_keys(&mut self, keys: AuthKeys) -> &mut Config {
-        self.auth_keys = Some(Box::new(keys));
+        self.auth = Some(Auth::AuthKeys(keys));
         self
-    }
-
-    /// Gets precomputed protocol-specific keys to authenticate with.
-    /// if one has been configured with the `auth_keys` method.
-    pub fn get_auth_keys(&self) -> Option<AuthKeys> {
-        self.auth_keys.as_deref().copied()
     }
 
     /// Sets the name of the database to connect to.
@@ -667,7 +674,7 @@ impl fmt::Debug for Config {
 
         f.debug_struct("Config")
             .field("user", &self.user)
-            .field("password", &self.password.as_ref().map(|_| Redaction {}))
+            .field("auth", &self.auth.as_ref().map(|_| Redaction {}))
             .field("dbname", &self.dbname)
             .field("options", &self.options)
             .field("application_name", &self.application_name)

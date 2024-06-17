@@ -1,5 +1,5 @@
 use crate::codec::{BackendMessage, BackendMessages, FrontendMessage, PostgresCodec};
-use crate::config::{self, AuthKeys, Config, ReplicationMode};
+use crate::config::{self, Auth, AuthKeys, Config, ReplicationMode};
 use crate::connect_tls::connect_tls;
 use crate::maybe_tls_stream::MaybeTlsStream;
 use crate::tls::{TlsConnect, TlsStream};
@@ -286,12 +286,10 @@ where
         Some(Message::AuthenticationCleartextPassword) => {
             can_skip_channel_binding(config)?;
 
-            let pass = config
-                .password
-                .as_ref()
-                .ok_or_else(|| Error::config("password missing".into()))?;
-
-            authenticate_password(stream, pass).await?;
+            match &config.auth {
+                Some(Auth::Password(pass)) => authenticate_password(stream, pass).await?,
+                _ => return Err(Error::config("password missing".into())),
+            }
         }
         Some(Message::AuthenticationMd5Password(body)) => {
             can_skip_channel_binding(config)?;
@@ -300,13 +298,14 @@ where
                 .user
                 .as_ref()
                 .ok_or_else(|| Error::config("user missing".into()))?;
-            let pass = config
-                .password
-                .as_ref()
-                .ok_or_else(|| Error::config("password missing".into()))?;
 
-            let output = authentication::md5_hash(user.as_bytes(), pass, body.salt());
-            authenticate_password(stream, output.as_bytes()).await?;
+            match &config.auth {
+                Some(Auth::Password(pass)) => {
+                    let output = authentication::md5_hash(user.as_bytes(), pass, body.salt());
+                    authenticate_password(stream, output.as_bytes()).await?;
+                }
+                _ => return Err(Error::config("password missing".into())),
+            }
         }
         Some(Message::AuthenticationSasl(body)) => {
             authenticate_sasl(stream, body, config).await?;
@@ -404,12 +403,12 @@ where
         can_skip_channel_binding(config)?;
     }
 
-    let mut scram = if let Some(AuthKeys::ScramSha256(keys)) = config.get_auth_keys() {
-        ScramSha256::new_with_keys(keys, channel_binding)
-    } else if let Some(password) = config.get_password() {
-        ScramSha256::new(password, channel_binding)
-    } else {
-        return Err(Error::config("password or auth keys missing".into()));
+    let mut scram = match &config.auth {
+        Some(Auth::AuthKeys(AuthKeys::ScramSha256(keys))) => {
+            ScramSha256::new_with_keys(*keys, channel_binding)
+        }
+        Some(Auth::Password(password)) => ScramSha256::new(password, channel_binding),
+        None => return Err(Error::config("password or auth keys missing".into())),
     };
 
     let mut buf = BytesMut::new();
