@@ -2,7 +2,7 @@
 
 #[cfg(feature = "runtime")]
 use crate::connect::connect;
-use crate::connect_raw::connect_raw;
+use crate::connect_raw::{connect_raw, StartupMessageParamsBuilder};
 use crate::keepalive::KeepaliveConfig;
 #[cfg(feature = "runtime")]
 use crate::tls::MakeTlsConnect;
@@ -185,6 +185,7 @@ pub struct Config {
     pub(crate) channel_binding: ChannelBinding,
     pub(crate) replication_mode: Option<ReplicationMode>,
     pub(crate) max_backend_message_size: Option<usize>,
+    pub(crate) extra_params: StartupMessageParamsBuilder,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -224,6 +225,7 @@ impl Config {
             channel_binding: ChannelBinding::Prefer,
             replication_mode: None,
             max_backend_message_size: None,
+            extra_params: StartupMessageParamsBuilder::default(),
         }
     }
 
@@ -615,9 +617,9 @@ impl Config {
                 }
             }
             key => {
-                return Err(Error::config_parse(Box::new(UnknownOption(
-                    key.to_string(),
-                ))));
+                self.extra_params
+                    .insert(key, value)
+                    .map_err(|e| Error::config_parse(e.into()))?;
             }
         }
 
@@ -692,17 +694,6 @@ impl fmt::Debug for Config {
             .finish()
     }
 }
-
-#[derive(Debug)]
-struct UnknownOption(String);
-
-impl fmt::Display for UnknownOption {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(fmt, "unknown option `{}`", self.0)
-    }
-}
-
-impl error::Error for UnknownOption {}
 
 #[derive(Debug)]
 struct InvalidValue(&'static str);

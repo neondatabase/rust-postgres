@@ -117,7 +117,7 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let mut params = StartupMessageParamsBuilder::default();
+    let mut params = config.extra_params.clone();
     params
         .insert("client_encoding", "UTF8")
         .map_err(Error::encode)?;
@@ -156,7 +156,7 @@ where
         .map_err(Error::io)
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct StartupMessageParamsBuilder {
     params: BytesMut,
 }
