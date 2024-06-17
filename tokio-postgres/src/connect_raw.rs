@@ -4,7 +4,7 @@ use crate::connect_tls::connect_tls;
 use crate::maybe_tls_stream::MaybeTlsStream;
 use crate::tls::{TlsConnect, TlsStream};
 use crate::{Client, Connection, Error};
-use bytes::BytesMut;
+use bytes::{BufMut, Bytes, BytesMut};
 use fallible_iterator::FallibleIterator;
 use futures_channel::mpsc;
 use futures_util::{ready, Sink, SinkExt, Stream, TryStreamExt};
@@ -14,6 +14,7 @@ use postgres_protocol::authentication::sasl::ScramSha256;
 use postgres_protocol::message::backend::{AuthenticationSaslBody, Message};
 use postgres_protocol::message::frontend;
 use std::collections::{HashMap, VecDeque};
+use std::ffi::CStr;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -116,33 +117,160 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let mut params = vec![("client_encoding", "UTF8")];
+    let mut params = StartupMessageParamsBuilder::default();
+    params
+        .insert("client_encoding", "UTF8")
+        .map_err(Error::encode)?;
+
     if let Some(user) = &config.user {
-        params.push(("user", &**user));
+        params.insert("user", user).map_err(Error::encode)?;
     }
     if let Some(dbname) = &config.dbname {
-        params.push(("database", &**dbname));
+        params.insert("database", dbname).map_err(Error::encode)?;
     }
     if let Some(options) = &config.options {
-        params.push(("options", &**options));
+        params.insert("options", options).map_err(Error::encode)?;
     }
     if let Some(application_name) = &config.application_name {
-        params.push(("application_name", &**application_name));
+        params
+            .insert("application_name", application_name)
+            .map_err(Error::encode)?;
     }
     if let Some(replication_mode) = &config.replication_mode {
         match replication_mode {
-            ReplicationMode::Physical => params.push(("replication", "true")),
-            ReplicationMode::Logical => params.push(("replication", "database")),
+            ReplicationMode::Physical => params
+                .insert("replication", "true")
+                .map_err(Error::encode)?,
+            ReplicationMode::Logical => params
+                .insert("replication", "database")
+                .map_err(Error::encode)?,
         }
     }
 
     let mut buf = BytesMut::new();
-    frontend::startup_message(params, &mut buf).map_err(Error::encode)?;
+    frontend::startup_message_cstr(params.freeze().iter(), &mut buf).map_err(Error::encode)?;
 
     stream
         .send(FrontendMessage::Raw(buf.freeze()))
         .await
         .map_err(Error::io)
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct StartupMessageParamsBuilder {
+    params: BytesMut,
+}
+
+impl StartupMessageParamsBuilder {
+    /// Set parameter's value by its name.
+    /// name and value must not contain a \0 byte
+    pub(crate) fn insert(&mut self, name: &str, value: &str) -> Result<(), io::Error> {
+        if name.contains('\0') | value.contains('\0') {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "string contains embedded null",
+            ));
+        }
+        self.params.put(name.as_bytes());
+        self.params.put(&b"\0"[..]);
+        self.params.put(value.as_bytes());
+        self.params.put(&b"\0"[..]);
+        Ok(())
+    }
+
+    pub(crate) fn freeze(self) -> StartupMessageParams {
+        StartupMessageParams {
+            params: self.params.freeze(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct StartupMessageParams {
+    params: Bytes,
+}
+
+impl StartupMessageParams {
+    // /// Get parameter's value by its name.
+    // pub(crate) fn get(&self, name: &str) -> Option<&CStr> {
+    //     self.iter()
+    //         .find_map(|(k, v)| (k.to_bytes() == name.as_bytes()).then_some(v))
+    // }
+
+    // /// Split command-line options according to PostgreSQL's logic,
+    // /// taking into account all escape sequences but leaving them as-is.
+    // /// [`None`] means that there's no `options` in [`Self`].
+    // pub(crate) fn options_raw(&self) -> Option<impl Iterator<Item = &str>> {
+    //     self.get("options").map(Self::parse_options_raw)
+    // }
+
+    // /// Split command-line options according to PostgreSQL's logic,
+    // /// applying all escape sequences (using owned strings as needed).
+    // /// [`None`] means that there's no `options` in [`Self`].
+    // pub(crate) fn options_escaped(&self) -> Option<impl Iterator<Item = Cow<'_, str>>> {
+    //     self.get("options").map(Self::parse_options_escaped)
+    // }
+
+    // /// Split command-line options according to PostgreSQL's logic,
+    // /// taking into account all escape sequences but leaving them as-is.
+    // pub(crate) fn parse_options_raw(input: &str) -> impl Iterator<Item = &str> {
+    //     // See `postgres: pg_split_opts`.
+    //     let mut last_was_escape = false;
+    //     input
+    //         .split(move |c: char| {
+    //             // We split by non-escaped whitespace symbols.
+    //             let should_split = c.is_ascii_whitespace() && !last_was_escape;
+    //             last_was_escape = c == '\\' && !last_was_escape;
+    //             should_split
+    //         })
+    //         .filter(|s| !s.is_empty())
+    // }
+
+    // /// Split command-line options according to PostgreSQL's logic,
+    // /// applying all escape sequences (using owned strings as needed).
+    // pub(crate) fn parse_options_escaped(input: &str) -> impl Iterator<Item = Cow<'_, str>> {
+    //     // See `postgres: pg_split_opts`.
+    //     Self::parse_options_raw(input).map(|s| {
+    //         let mut preserve_next_escape = false;
+    //         let escape = |c| {
+    //             // We should remove '\\' unless it's preceded by '\\'.
+    //             let should_remove = c == '\\' && !preserve_next_escape;
+    //             preserve_next_escape = should_remove;
+    //             should_remove
+    //         };
+
+    //         match s.contains('\\') {
+    //             true => Cow::Owned(s.replace(escape, "")),
+    //             false => Cow::Borrowed(s),
+    //         }
+    //     })
+    // }
+
+    /// Iterate through key-value pairs in an arbitrary order.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
+        let params =
+            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
+        ParamsIter(params)
+    }
+}
+
+struct ParamsIter<'a>(&'a str);
+
+impl<'a> Iterator for ParamsIter<'a> {
+    type Item = (&'a CStr, &'a CStr);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (key, r) = split_cstr(self.0)?;
+        let (value, r) = split_cstr(r)?;
+        self.0 = r;
+        Some((key, value))
+    }
+}
+
+fn split_cstr(s: &str) -> Option<(&CStr, &str)> {
+    let cstr = CStr::from_bytes_until_nul(s.as_bytes()).ok()?;
+    let (_, next) = s.split_at(cstr.to_bytes_with_nul().len());
+    Some((cstr, next))
 }
 
 async fn authenticate<S, T>(stream: &mut StartupStream<S, T>, config: &Config) -> Result<(), Error>

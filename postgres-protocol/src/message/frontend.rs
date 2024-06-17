@@ -5,6 +5,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut};
 use std::convert::TryFrom;
 use std::error::Error;
+use std::ffi::CStr;
 use std::io;
 use std::marker;
 
@@ -272,6 +273,23 @@ where
 }
 
 #[inline]
+pub fn startup_message_cstr<'a, I>(parameters: I, buf: &mut BytesMut) -> io::Result<()>
+where
+    I: IntoIterator<Item = (&'a CStr, &'a CStr)>,
+{
+    write_body(buf, |buf| {
+        // postgres protocol version 3.0(196608) in bigger-endian
+        buf.put_i32(0x00_03_00_00);
+        for (key, value) in parameters {
+            write_cstr2(key, buf)?;
+            write_cstr2(value, buf)?;
+        }
+        buf.put_u8(0);
+        Ok(())
+    })
+}
+
+#[inline]
 pub fn sync(buf: &mut BytesMut) {
     buf.put_u8(b'S');
     write_body(buf, |_| Ok::<(), io::Error>(())).unwrap();
@@ -293,5 +311,11 @@ fn write_cstr(s: &[u8], buf: &mut BytesMut) -> Result<(), io::Error> {
     }
     buf.put_slice(s);
     buf.put_u8(0);
+    Ok(())
+}
+
+#[inline]
+fn write_cstr2(s: &CStr, buf: &mut BytesMut) -> Result<(), io::Error> {
+    buf.put_slice(s.to_bytes_with_nul());
     Ok(())
 }
