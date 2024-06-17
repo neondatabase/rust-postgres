@@ -281,8 +281,8 @@ where
         // postgres protocol version 3.0(196608) in bigger-endian
         buf.put_i32(0x00_03_00_00);
         for (key, value) in parameters {
-            write_cstr2(key, buf)?;
-            write_cstr2(value, buf)?;
+            buf.put_slice(key.to_bytes_with_nul());
+            buf.put_slice(value.to_bytes_with_nul());
         }
         buf.put_u8(0);
         Ok(())
@@ -311,11 +311,5 @@ fn write_cstr(s: &[u8], buf: &mut BytesMut) -> Result<(), io::Error> {
     }
     buf.put_slice(s);
     buf.put_u8(0);
-    Ok(())
-}
-
-#[inline]
-fn write_cstr2(s: &CStr, buf: &mut BytesMut) -> Result<(), io::Error> {
-    buf.put_slice(s.to_bytes_with_nul());
     Ok(())
 }
