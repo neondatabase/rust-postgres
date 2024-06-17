@@ -285,9 +285,7 @@ impl Config {
 
     /// Sets command line options used to configure the server.
     pub fn options(&mut self, options: &str) -> &mut Config {
-        self.extra_params
-            .insert("application_name", options)
-            .unwrap();
+        self.extra_params.insert("options", options).unwrap();
         self
     }
 
@@ -489,6 +487,9 @@ impl Config {
             }
             "password" => {
                 self.password(value);
+            }
+            "dbname" => {
+                self.dbname(value);
             }
             "sslmode" => {
                 let mode = match value {

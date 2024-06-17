@@ -161,6 +161,12 @@ impl Config {
         self
     }
 
+    /// Gets the name of the database to connect to, if one has been configured
+    /// with the `dbname` method.
+    pub fn get_dbname(&self) -> Option<&str> {
+        self.config.get_dbname()
+    }
+
     /// Sets command line options used to configure the server.
     pub fn options(&mut self, options: &str) -> &mut Config {
         self.config.options(options);

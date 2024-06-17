@@ -119,7 +119,10 @@ where
 {
     let mut params = config.extra_params.clone();
 
-    // params.insert("client_encoding", "UTF8").unwrap();
+    // leave for user to provide:
+    // params
+    //     .insert("client_encoding", "UTF8")
+    //     .map_err(Error::encode)?;
 
     if let Some(user) = &config.user {
         params.insert("user", user).map_err(Error::encode)?;
