@@ -173,8 +173,6 @@ pub struct Config {
     pub(crate) user: Option<String>,
     pub(crate) auth: Option<Auth>,
     pub(crate) dbname: Option<String>,
-    pub(crate) options: Option<String>,
-    pub(crate) application_name: Option<String>,
     pub(crate) ssl_mode: SslMode,
     pub(crate) host: Vec<Host>,
     pub(crate) port: Vec<u16>,
@@ -183,15 +181,17 @@ pub struct Config {
     pub(crate) keepalive_config: KeepaliveConfig,
     pub(crate) target_session_attrs: TargetSessionAttrs,
     pub(crate) channel_binding: ChannelBinding,
-    pub(crate) replication_mode: Option<ReplicationMode>,
     pub(crate) max_backend_message_size: Option<usize>,
     pub(crate) extra_params: StartupMessageParamsBuilder,
 }
 
 #[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
+/// What auth info to use when authenticating
 pub enum Auth {
+    /// password based auth
     Password(Vec<u8>),
+    /// precomputed scram based auth
     AuthKeys(AuthKeys),
 }
 
@@ -213,8 +213,8 @@ impl Config {
             user: None,
             auth: None,
             dbname: None,
-            options: None,
-            application_name: None,
+            // options: None,
+            // application_name: None,
             ssl_mode: SslMode::Prefer,
             host: vec![],
             port: vec![],
@@ -223,7 +223,7 @@ impl Config {
             keepalive_config,
             target_session_attrs: TargetSessionAttrs::Any,
             channel_binding: ChannelBinding::Prefer,
-            replication_mode: None,
+            // replication_mode: None,
             max_backend_message_size: None,
             extra_params: StartupMessageParamsBuilder::default(),
         }
@@ -290,26 +290,14 @@ impl Config {
 
     /// Sets command line options used to configure the server.
     pub fn options(&mut self, options: &str) -> &mut Config {
-        self.options = Some(options.to_string());
+        self.extra_params.insert("application_name", options).unwrap();
         self
-    }
-
-    /// Gets the command line options used to configure the server, if the
-    /// options have been set with the `options` method.
-    pub fn get_options(&self) -> Option<&str> {
-        self.options.as_deref()
     }
 
     /// Sets the value of the `application_name` runtime parameter.
     pub fn application_name(&mut self, application_name: &str) -> &mut Config {
-        self.application_name = Some(application_name.to_string());
+        self.extra_params.insert("application_name", application_name).unwrap();
         self
-    }
-
-    /// Gets the value of the `application_name` runtime parameter, if it has
-    /// been set with the `application_name` method.
-    pub fn get_application_name(&self) -> Option<&str> {
-        self.application_name.as_deref()
     }
 
     /// Sets the SSL configuration.
@@ -472,16 +460,16 @@ impl Config {
         self.channel_binding
     }
 
-    /// Set replication mode.
-    pub fn replication_mode(&mut self, replication_mode: ReplicationMode) -> &mut Config {
-        self.replication_mode = Some(replication_mode);
-        self
-    }
+    // /// Set replication mode.
+    // pub fn replication_mode(&mut self, replication_mode: ReplicationMode) -> &mut Config {
+    //     self.replication_mode = Some(replication_mode);
+    //     self
+    // }
 
-    /// Get replication mode.
-    pub fn get_replication_mode(&self) -> Option<ReplicationMode> {
-        self.replication_mode
-    }
+    // /// Get replication mode.
+    // pub fn get_replication_mode(&self) -> Option<ReplicationMode> {
+    //     self.replication_mode
+    // }
 
     /// Set limit for backend messages size.
     pub fn max_backend_message_size(&mut self, max_backend_message_size: usize) -> &mut Config {
@@ -505,12 +493,12 @@ impl Config {
             "dbname" => {
                 self.dbname(value);
             }
-            "options" => {
-                self.options(value);
-            }
-            "application_name" => {
-                self.application_name(value);
-            }
+            // "options" => {
+            //     self.options(value);
+            // }
+            // "application_name" => {
+            //     self.application_name(value);
+            // }
             "sslmode" => {
                 let mode = match value {
                     "disable" => SslMode::Disable,
@@ -597,17 +585,17 @@ impl Config {
                 };
                 self.channel_binding(channel_binding);
             }
-            "replication" => {
-                let mode = match value {
-                    "off" => None,
-                    "true" => Some(ReplicationMode::Physical),
-                    "database" => Some(ReplicationMode::Logical),
-                    _ => return Err(Error::config_parse(Box::new(InvalidValue("replication")))),
-                };
-                if let Some(mode) = mode {
-                    self.replication_mode(mode);
-                }
-            }
+            // "replication" => {
+            //     let mode = match value {
+            //         "off" => None,
+            //         "true" => Some(ReplicationMode::Physical),
+            //         "database" => Some(ReplicationMode::Logical),
+            //         _ => return Err(Error::config_parse(Box::new(InvalidValue("replication")))),
+            //     };
+            //     if let Some(mode) = mode {
+            //         self.replication_mode(mode);
+            //     }
+            // }
             "max_backend_message_size" => {
                 let limit = value.parse::<usize>().map_err(|_| {
                     Error::config_parse(Box::new(InvalidValue("max_backend_message_size")))
@@ -678,8 +666,8 @@ impl fmt::Debug for Config {
             .field("user", &self.user)
             .field("auth", &self.auth.as_ref().map(|_| Redaction {}))
             .field("dbname", &self.dbname)
-            .field("options", &self.options)
-            .field("application_name", &self.application_name)
+            // .field("options", &self.options)
+            // .field("application_name", &self.application_name)
             .field("ssl_mode", &self.ssl_mode)
             .field("host", &self.host)
             .field("port", &self.port)
@@ -690,7 +678,7 @@ impl fmt::Debug for Config {
             .field("keepalives_retries", &self.keepalive_config.retries)
             .field("target_session_attrs", &self.target_session_attrs)
             .field("channel_binding", &self.channel_binding)
-            .field("replication", &self.replication_mode)
+            // .field("replication", &self.replication_mode)
             .finish()
     }
 }

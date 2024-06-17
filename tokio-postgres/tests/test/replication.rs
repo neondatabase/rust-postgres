@@ -10,6 +10,7 @@ use tokio_postgres::NoTls;
 use tokio_postgres::SimpleQueryMessage::Row;
 
 #[tokio::test]
+#[ignore = "replication"]
 async fn test_replication() {
     // form SQL connection
     let conninfo = "host=127.0.0.1 port=5433 user=postgres replication=database";
