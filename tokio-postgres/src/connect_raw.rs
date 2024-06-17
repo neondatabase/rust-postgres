@@ -118,19 +118,15 @@ where
     T: AsyncRead + AsyncWrite + Unpin,
 {
     let mut params = config.extra_params.clone();
-    params
-        .insert("client_encoding", "UTF8")
-        .map_err(Error::encode)?;
+
+    // params.insert("client_encoding", "UTF8").unwrap();
 
     if let Some(user) = &config.user {
         params.insert("user", user).map_err(Error::encode)?;
     }
-    if let Some(dbname) = &config.dbname {
-        params.insert("database", dbname).map_err(Error::encode)?;
-    }
 
     let mut buf = BytesMut::new();
-    frontend::startup_message_cstr(params.freeze().iter(), &mut buf).map_err(Error::encode)?;
+    frontend::startup_message_cstr(params.freeze().cstr_iter(), &mut buf).map_err(Error::encode)?;
 
     stream
         .send(FrontendMessage::Raw(buf.freeze()))
@@ -173,72 +169,34 @@ pub(crate) struct StartupMessageParams {
 }
 
 impl StartupMessageParams {
-    // /// Get parameter's value by its name.
-    // pub(crate) fn get(&self, name: &str) -> Option<&CStr> {
-    //     self.iter()
-    //         .find_map(|(k, v)| (k.to_bytes() == name.as_bytes()).then_some(v))
-    // }
-
-    // /// Split command-line options according to PostgreSQL's logic,
-    // /// taking into account all escape sequences but leaving them as-is.
-    // /// [`None`] means that there's no `options` in [`Self`].
-    // pub(crate) fn options_raw(&self) -> Option<impl Iterator<Item = &str>> {
-    //     self.get("options").map(Self::parse_options_raw)
-    // }
-
-    // /// Split command-line options according to PostgreSQL's logic,
-    // /// applying all escape sequences (using owned strings as needed).
-    // /// [`None`] means that there's no `options` in [`Self`].
-    // pub(crate) fn options_escaped(&self) -> Option<impl Iterator<Item = Cow<'_, str>>> {
-    //     self.get("options").map(Self::parse_options_escaped)
-    // }
-
-    // /// Split command-line options according to PostgreSQL's logic,
-    // /// taking into account all escape sequences but leaving them as-is.
-    // pub(crate) fn parse_options_raw(input: &str) -> impl Iterator<Item = &str> {
-    //     // See `postgres: pg_split_opts`.
-    //     let mut last_was_escape = false;
-    //     input
-    //         .split(move |c: char| {
-    //             // We split by non-escaped whitespace symbols.
-    //             let should_split = c.is_ascii_whitespace() && !last_was_escape;
-    //             last_was_escape = c == '\\' && !last_was_escape;
-    //             should_split
-    //         })
-    //         .filter(|s| !s.is_empty())
-    // }
-
-    // /// Split command-line options according to PostgreSQL's logic,
-    // /// applying all escape sequences (using owned strings as needed).
-    // pub(crate) fn parse_options_escaped(input: &str) -> impl Iterator<Item = Cow<'_, str>> {
-    //     // See `postgres: pg_split_opts`.
-    //     Self::parse_options_raw(input).map(|s| {
-    //         let mut preserve_next_escape = false;
-    //         let escape = |c| {
-    //             // We should remove '\\' unless it's preceded by '\\'.
-    //             let should_remove = c == '\\' && !preserve_next_escape;
-    //             preserve_next_escape = should_remove;
-    //             should_remove
-    //         };
-
-    //         match s.contains('\\') {
-    //             true => Cow::Owned(s.replace(escape, "")),
-    //             false => Cow::Borrowed(s),
-    //         }
-    //     })
-    // }
-
-    /// Iterate through key-value pairs in an arbitrary order.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
+    pub(crate) fn cstr_iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
         let params =
             std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
-        ParamsIter(params)
+        CStrParamsIter(params)
+    }
+    pub(crate) fn str_iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        let params =
+            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
+        StrParamsIter(params)
     }
 }
 
-struct ParamsIter<'a>(&'a str);
+struct StrParamsIter<'a>(&'a str);
 
-impl<'a> Iterator for ParamsIter<'a> {
+impl<'a> Iterator for StrParamsIter<'a> {
+    type Item = (&'a str, &'a str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (key, r) = self.0.split_once('\0')?;
+        let (value, r) = r.split_once('\0')?;
+        self.0 = r;
+        Some((key, value))
+    }
+}
+
+struct CStrParamsIter<'a>(&'a str);
+
+impl<'a> Iterator for CStrParamsIter<'a> {
     type Item = (&'a CStr, &'a CStr);
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -172,7 +172,6 @@ pub enum AuthKeys {
 pub struct Config {
     pub(crate) user: Option<String>,
     pub(crate) auth: Option<Auth>,
-    pub(crate) dbname: Option<String>,
     pub(crate) ssl_mode: SslMode,
     pub(crate) host: Vec<Host>,
     pub(crate) port: Vec<u16>,
@@ -212,9 +211,6 @@ impl Config {
         Config {
             user: None,
             auth: None,
-            dbname: None,
-            // options: None,
-            // application_name: None,
             ssl_mode: SslMode::Prefer,
             host: vec![],
             port: vec![],
@@ -223,7 +219,6 @@ impl Config {
             keepalive_config,
             target_session_attrs: TargetSessionAttrs::Any,
             channel_binding: ChannelBinding::Prefer,
-            // replication_mode: None,
             max_backend_message_size: None,
             extra_params: StartupMessageParamsBuilder::default(),
         }
@@ -278,25 +273,23 @@ impl Config {
     ///
     /// Defaults to the user.
     pub fn dbname(&mut self, dbname: &str) -> &mut Config {
-        self.dbname = Some(dbname.to_string());
+        self.extra_params.insert("database", dbname).unwrap();
         self
-    }
-
-    /// Gets the name of the database to connect to, if one has been configured
-    /// with the `dbname` method.
-    pub fn get_dbname(&self) -> Option<&str> {
-        self.dbname.as_deref()
     }
 
     /// Sets command line options used to configure the server.
     pub fn options(&mut self, options: &str) -> &mut Config {
-        self.extra_params.insert("application_name", options).unwrap();
+        self.extra_params
+            .insert("application_name", options)
+            .unwrap();
         self
     }
 
     /// Sets the value of the `application_name` runtime parameter.
     pub fn application_name(&mut self, application_name: &str) -> &mut Config {
-        self.extra_params.insert("application_name", application_name).unwrap();
+        self.extra_params
+            .insert("application_name", application_name)
+            .unwrap();
         self
     }
 
@@ -662,12 +655,9 @@ impl fmt::Debug for Config {
             }
         }
 
-        f.debug_struct("Config")
-            .field("user", &self.user)
+        let mut f = f.debug_struct("Config");
+        f.field("user", &self.user)
             .field("auth", &self.auth.as_ref().map(|_| Redaction {}))
-            .field("dbname", &self.dbname)
-            // .field("options", &self.options)
-            // .field("application_name", &self.application_name)
             .field("ssl_mode", &self.ssl_mode)
             .field("host", &self.host)
             .field("port", &self.port)
@@ -677,9 +667,13 @@ impl fmt::Debug for Config {
             .field("keepalives_interval", &self.keepalive_config.interval)
             .field("keepalives_retries", &self.keepalive_config.retries)
             .field("target_session_attrs", &self.target_session_attrs)
-            .field("channel_binding", &self.channel_binding)
-            // .field("replication", &self.replication_mode)
-            .finish()
+            .field("channel_binding", &self.channel_binding);
+
+        for (k, v) in self.extra_params.clone().freeze().str_iter() {
+            f.field(k, &v);
+        }
+
+        f.finish()
     }
 }
 
