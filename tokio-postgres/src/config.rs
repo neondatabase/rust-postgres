@@ -459,16 +459,16 @@ impl Config {
         self.channel_binding
     }
 
-    // /// Set replication mode.
-    // pub fn replication_mode(&mut self, replication_mode: ReplicationMode) -> &mut Config {
-    //     self.replication_mode = Some(replication_mode);
-    //     self
-    // }
-
-    // /// Get replication mode.
-    // pub fn get_replication_mode(&self) -> Option<ReplicationMode> {
-    //     self.replication_mode
-    // }
+    /// Set replication mode.
+    pub fn replication_mode(&mut self, replication_mode: ReplicationMode) -> &mut Config {
+        match replication_mode {
+            ReplicationMode::Physical => self.extra_params.insert("replication", "true").unwrap(),
+            ReplicationMode::Logical => {
+                self.extra_params.insert("replication", "database").unwrap()
+            }
+        }
+        self
+    }
 
     /// Set limit for backend messages size.
     pub fn max_backend_message_size(&mut self, max_backend_message_size: usize) -> &mut Config {
