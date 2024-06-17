@@ -277,6 +277,12 @@ impl Config {
         self
     }
 
+    /// Gets the name of the database to connect to, if one has been configured
+    /// with the `dbname` method.
+    pub fn get_dbname(&self) -> Option<&str> {
+        self.extra_params.get("database")
+    }
+
     /// Sets command line options used to configure the server.
     pub fn options(&mut self, options: &str) -> &mut Config {
         self.extra_params
@@ -475,7 +481,8 @@ impl Config {
         self.max_backend_message_size
     }
 
-    fn param(&mut self, key: &str, value: &str) -> Result<(), Error> {
+    /// Set an arbitrary param
+    pub fn param(&mut self, key: &str, value: &str) -> Result<(), Error> {
         match key {
             "user" => {
                 self.user(value);
@@ -483,15 +490,6 @@ impl Config {
             "password" => {
                 self.password(value);
             }
-            "dbname" => {
-                self.dbname(value);
-            }
-            // "options" => {
-            //     self.options(value);
-            // }
-            // "application_name" => {
-            //     self.application_name(value);
-            // }
             "sslmode" => {
                 let mode = match value {
                     "disable" => SslMode::Disable,
@@ -578,17 +576,6 @@ impl Config {
                 };
                 self.channel_binding(channel_binding);
             }
-            // "replication" => {
-            //     let mode = match value {
-            //         "off" => None,
-            //         "true" => Some(ReplicationMode::Physical),
-            //         "database" => Some(ReplicationMode::Logical),
-            //         _ => return Err(Error::config_parse(Box::new(InvalidValue("replication")))),
-            //     };
-            //     if let Some(mode) = mode {
-            //         self.replication_mode(mode);
-            //     }
-            // }
             "max_backend_message_size" => {
                 let limit = value.parse::<usize>().map_err(|_| {
                     Error::config_parse(Box::new(InvalidValue("max_backend_message_size")))
@@ -669,7 +656,7 @@ impl fmt::Debug for Config {
             .field("target_session_attrs", &self.target_session_attrs)
             .field("channel_binding", &self.channel_binding);
 
-        for (k, v) in self.extra_params.clone().freeze().str_iter() {
+        for (k, v) in self.extra_params.str_iter() {
             f.field(k, &v);
         }
 

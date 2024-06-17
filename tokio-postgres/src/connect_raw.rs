@@ -161,23 +161,16 @@ impl StartupMessageParamsBuilder {
             params: self.params.freeze(),
         }
     }
-}
 
-#[derive(Debug, Clone, Default)]
-pub(crate) struct StartupMessageParams {
-    params: Bytes,
-}
-
-impl StartupMessageParams {
-    pub(crate) fn cstr_iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
-        let params =
-            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
-        CStrParamsIter(params)
-    }
     pub(crate) fn str_iter(&self) -> impl Iterator<Item = (&str, &str)> {
         let params =
             std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
         StrParamsIter(params)
+    }
+
+    /// Get parameter's value by its name.
+    pub(crate) fn get(&self, name: &str) -> Option<&str> {
+        self.str_iter().find_map(|(k, v)| (k == name).then_some(v))
     }
 }
 
@@ -191,6 +184,19 @@ impl<'a> Iterator for StrParamsIter<'a> {
         let (value, r) = r.split_once('\0')?;
         self.0 = r;
         Some((key, value))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct StartupMessageParams {
+    params: Bytes,
+}
+
+impl StartupMessageParams {
+    pub(crate) fn cstr_iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
+        let params =
+            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
+        CStrParamsIter(params)
     }
 }
 
