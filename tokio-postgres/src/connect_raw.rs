@@ -4,7 +4,7 @@ use crate::connect_tls::connect_tls;
 use crate::maybe_tls_stream::MaybeTlsStream;
 use crate::tls::{TlsConnect, TlsStream};
 use crate::{Client, Connection, Error};
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 use fallible_iterator::FallibleIterator;
 use futures_channel::mpsc;
 use futures_util::{ready, Sink, SinkExt, Stream, TryStreamExt};
@@ -117,19 +117,15 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let mut params = config.extra_params.clone();
-
     // leave for user to provide:
+    // let mut params = config.server_settings.clone();
     // params
     //     .insert("client_encoding", "UTF8")
     //     .map_err(Error::encode)?;
 
-    if let Some(user) = &config.user {
-        params.insert("user", user).map_err(Error::encode)?;
-    }
-
     let mut buf = BytesMut::new();
-    frontend::startup_message_cstr(params.freeze().cstr_iter(), &mut buf).map_err(Error::encode)?;
+    frontend::startup_message_cstr(config.server_settings.cstr_iter(), &mut buf)
+        .map_err(Error::encode)?;
 
     stream
         .send(FrontendMessage::Raw(buf.freeze()))
@@ -138,13 +134,12 @@ where
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct StartupMessageParamsBuilder {
+pub(crate) struct StartupMessageParams {
     params: BytesMut,
 }
 
-impl StartupMessageParamsBuilder {
+impl StartupMessageParams {
     /// Set parameter's value by its name.
-    /// name and value must not contain a \0 byte
     pub(crate) fn insert(&mut self, name: &str, value: &str) -> Result<(), io::Error> {
         if name.contains('\0') | value.contains('\0') {
             return Err(io::Error::new(
@@ -159,16 +154,16 @@ impl StartupMessageParamsBuilder {
         Ok(())
     }
 
-    pub(crate) fn freeze(self) -> StartupMessageParams {
-        StartupMessageParams {
-            params: self.params.freeze(),
-        }
-    }
-
     pub(crate) fn str_iter(&self) -> impl Iterator<Item = (&str, &str)> {
         let params =
             std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
         StrParamsIter(params)
+    }
+
+    pub(crate) fn cstr_iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
+        let params =
+            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
+        CStrParamsIter(params)
     }
 
     /// Get parameter's value by its name.
@@ -187,19 +182,6 @@ impl<'a> Iterator for StrParamsIter<'a> {
         let (value, r) = r.split_once('\0')?;
         self.0 = r;
         Some((key, value))
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub(crate) struct StartupMessageParams {
-    params: Bytes,
-}
-
-impl StartupMessageParams {
-    pub(crate) fn cstr_iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
-        let params =
-            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
-        CStrParamsIter(params)
     }
 }
 
@@ -244,8 +226,7 @@ where
             can_skip_channel_binding(config)?;
 
             let user = config
-                .user
-                .as_ref()
+                .get_user()
                 .ok_or_else(|| Error::config("user missing".into()))?;
 
             match &config.auth {

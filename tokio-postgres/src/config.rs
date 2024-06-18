@@ -2,7 +2,7 @@
 
 #[cfg(feature = "runtime")]
 use crate::connect::connect;
-use crate::connect_raw::{connect_raw, StartupMessageParamsBuilder};
+use crate::connect_raw::{connect_raw, StartupMessageParams};
 use crate::keepalive::KeepaliveConfig;
 #[cfg(feature = "runtime")]
 use crate::tls::MakeTlsConnect;
@@ -170,7 +170,6 @@ pub enum AuthKeys {
 /// ```
 #[derive(Clone, PartialEq, Eq)]
 pub struct Config {
-    pub(crate) user: Option<String>,
     pub(crate) auth: Option<Auth>,
     pub(crate) ssl_mode: SslMode,
     pub(crate) host: Vec<Host>,
@@ -181,7 +180,7 @@ pub struct Config {
     pub(crate) target_session_attrs: TargetSessionAttrs,
     pub(crate) channel_binding: ChannelBinding,
     pub(crate) max_backend_message_size: Option<usize>,
-    pub(crate) extra_params: StartupMessageParamsBuilder,
+    pub(crate) server_settings: StartupMessageParams,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -209,7 +208,6 @@ impl Config {
             retries: None,
         };
         Config {
-            user: None,
             auth: None,
             ssl_mode: SslMode::Prefer,
             host: vec![],
@@ -220,7 +218,7 @@ impl Config {
             target_session_attrs: TargetSessionAttrs::Any,
             channel_binding: ChannelBinding::Prefer,
             max_backend_message_size: None,
-            extra_params: StartupMessageParamsBuilder::default(),
+            server_settings: StartupMessageParams::default(),
         }
     }
 
@@ -228,14 +226,14 @@ impl Config {
     ///
     /// Required.
     pub fn user(&mut self, user: &str) -> &mut Config {
-        self.user = Some(user.to_string());
+        self.server_settings.insert("user", user).unwrap();
         self
     }
 
     /// Gets the user to authenticate with, if one has been configured with
     /// the `user` method.
     pub fn get_user(&self) -> Option<&str> {
-        self.user.as_deref()
+        self.server_settings.get("user")
     }
 
     /// Sets the password to authenticate with.
@@ -273,25 +271,25 @@ impl Config {
     ///
     /// Defaults to the user.
     pub fn dbname(&mut self, dbname: &str) -> &mut Config {
-        self.extra_params.insert("database", dbname).unwrap();
+        self.server_settings.insert("database", dbname).unwrap();
         self
     }
 
     /// Gets the name of the database to connect to, if one has been configured
     /// with the `dbname` method.
     pub fn get_dbname(&self) -> Option<&str> {
-        self.extra_params.get("database")
+        self.server_settings.get("database")
     }
 
     /// Sets command line options used to configure the server.
     pub fn options(&mut self, options: &str) -> &mut Config {
-        self.extra_params.insert("options", options).unwrap();
+        self.server_settings.insert("options", options).unwrap();
         self
     }
 
     /// Sets the value of the `application_name` runtime parameter.
     pub fn application_name(&mut self, application_name: &str) -> &mut Config {
-        self.extra_params
+        self.server_settings
             .insert("application_name", application_name)
             .unwrap();
         self
@@ -460,10 +458,13 @@ impl Config {
     /// Set replication mode.
     pub fn replication_mode(&mut self, replication_mode: ReplicationMode) -> &mut Config {
         match replication_mode {
-            ReplicationMode::Physical => self.extra_params.insert("replication", "true").unwrap(),
-            ReplicationMode::Logical => {
-                self.extra_params.insert("replication", "database").unwrap()
+            ReplicationMode::Physical => {
+                self.server_settings.insert("replication", "true").unwrap()
             }
+            ReplicationMode::Logical => self
+                .server_settings
+                .insert("replication", "database")
+                .unwrap(),
         }
         self
     }
@@ -586,7 +587,7 @@ impl Config {
                 }
             }
             key => {
-                self.extra_params
+                self.server_settings
                     .insert(key, value)
                     .map_err(|e| Error::config_parse(e.into()))?;
             }
@@ -644,8 +645,7 @@ impl fmt::Debug for Config {
         }
 
         let mut f = f.debug_struct("Config");
-        f.field("user", &self.user)
-            .field("auth", &self.auth.as_ref().map(|_| Redaction {}))
+        f.field("auth", &self.auth.as_ref().map(|_| Redaction {}))
             .field("ssl_mode", &self.ssl_mode)
             .field("host", &self.host)
             .field("port", &self.port)
@@ -657,7 +657,7 @@ impl fmt::Debug for Config {
             .field("target_session_attrs", &self.target_session_attrs)
             .field("channel_binding", &self.channel_binding);
 
-        for (k, v) in self.extra_params.str_iter() {
+        for (k, v) in self.server_settings.str_iter() {
             f.field(k, &v);
         }
 
