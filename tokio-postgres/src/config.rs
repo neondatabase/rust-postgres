@@ -2,7 +2,7 @@
 
 #[cfg(feature = "runtime")]
 use crate::connect::connect;
-use crate::connect_raw::{connect_raw, StartupMessageParams};
+use crate::connect_raw::connect_raw;
 use crate::keepalive::KeepaliveConfig;
 #[cfg(feature = "runtime")]
 use crate::tls::MakeTlsConnect;
@@ -10,6 +10,7 @@ use crate::tls::TlsConnect;
 #[cfg(feature = "runtime")]
 use crate::Socket;
 use crate::{Client, Connection, Error};
+use postgres_protocol::message::frontend::StartupMessageParams;
 use std::borrow::Cow;
 #[cfg(unix)]
 use std::ffi::OsStr;

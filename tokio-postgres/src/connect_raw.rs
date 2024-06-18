@@ -4,7 +4,7 @@ use crate::connect_tls::connect_tls;
 use crate::maybe_tls_stream::MaybeTlsStream;
 use crate::tls::{TlsConnect, TlsStream};
 use crate::{Client, Connection, Error};
-use bytes::{BufMut, BytesMut};
+use bytes::BytesMut;
 use fallible_iterator::FallibleIterator;
 use futures_channel::mpsc;
 use futures_util::{ready, Sink, SinkExt, Stream, TryStreamExt};
@@ -14,7 +14,6 @@ use postgres_protocol::authentication::sasl::ScramSha256;
 use postgres_protocol::message::backend::{AuthenticationSaslBody, Message};
 use postgres_protocol::message::frontend;
 use std::collections::{HashMap, VecDeque};
-use std::ffi::CStr;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -124,84 +123,12 @@ where
     //     .map_err(Error::encode)?;
 
     let mut buf = BytesMut::new();
-    frontend::startup_message_cstr(config.server_settings.cstr_iter(), &mut buf)
-        .map_err(Error::encode)?;
+    frontend::startup_message_cstr(&config.server_settings, &mut buf).map_err(Error::encode)?;
 
     stream
         .send(FrontendMessage::Raw(buf.freeze()))
         .await
         .map_err(Error::io)
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct StartupMessageParams {
-    params: BytesMut,
-}
-
-impl StartupMessageParams {
-    /// Set parameter's value by its name.
-    pub(crate) fn insert(&mut self, name: &str, value: &str) -> Result<(), io::Error> {
-        if name.contains('\0') | value.contains('\0') {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "string contains embedded null",
-            ));
-        }
-        self.params.put(name.as_bytes());
-        self.params.put(&b"\0"[..]);
-        self.params.put(value.as_bytes());
-        self.params.put(&b"\0"[..]);
-        Ok(())
-    }
-
-    pub(crate) fn str_iter(&self) -> impl Iterator<Item = (&str, &str)> {
-        let params =
-            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
-        StrParamsIter(params)
-    }
-
-    pub(crate) fn cstr_iter(&self) -> impl Iterator<Item = (&CStr, &CStr)> {
-        let params =
-            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
-        CStrParamsIter(params)
-    }
-
-    /// Get parameter's value by its name.
-    pub(crate) fn get(&self, name: &str) -> Option<&str> {
-        self.str_iter().find_map(|(k, v)| (k == name).then_some(v))
-    }
-}
-
-struct StrParamsIter<'a>(&'a str);
-
-impl<'a> Iterator for StrParamsIter<'a> {
-    type Item = (&'a str, &'a str);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (key, r) = self.0.split_once('\0')?;
-        let (value, r) = r.split_once('\0')?;
-        self.0 = r;
-        Some((key, value))
-    }
-}
-
-struct CStrParamsIter<'a>(&'a str);
-
-impl<'a> Iterator for CStrParamsIter<'a> {
-    type Item = (&'a CStr, &'a CStr);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (key, r) = split_cstr(self.0)?;
-        let (value, r) = split_cstr(r)?;
-        self.0 = r;
-        Some((key, value))
-    }
-}
-
-fn split_cstr(s: &str) -> Option<(&CStr, &str)> {
-    let cstr = CStr::from_bytes_until_nul(s.as_bytes()).ok()?;
-    let (_, next) = s.split_at(cstr.to_bytes_with_nul().len());
-    Some((cstr, next))
 }
 
 async fn authenticate<S, T>(stream: &mut StartupStream<S, T>, config: &Config) -> Result<(), Error>

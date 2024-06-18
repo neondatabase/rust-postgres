@@ -5,7 +5,6 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut};
 use std::convert::TryFrom;
 use std::error::Error;
-use std::ffi::CStr;
 use std::io;
 use std::marker;
 
@@ -273,20 +272,63 @@ where
 }
 
 #[inline]
-pub fn startup_message_cstr<'a, I>(parameters: I, buf: &mut BytesMut) -> io::Result<()>
-where
-    I: IntoIterator<Item = (&'a CStr, &'a CStr)>,
-{
+pub fn startup_message_cstr(
+    parameters: &StartupMessageParams,
+    buf: &mut BytesMut,
+) -> io::Result<()> {
     write_body(buf, |buf| {
         // postgres protocol version 3.0(196608) in bigger-endian
         buf.put_i32(0x00_03_00_00);
-        for (key, value) in parameters {
-            buf.put_slice(key.to_bytes_with_nul());
-            buf.put_slice(value.to_bytes_with_nul());
-        }
+        buf.put_slice(&parameters.params);
         buf.put_u8(0);
         Ok(())
     })
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StartupMessageParams {
+    params: BytesMut,
+}
+
+impl StartupMessageParams {
+    /// Set parameter's value by its name.
+    pub fn insert(&mut self, name: &str, value: &str) -> Result<(), io::Error> {
+        if name.contains('\0') | value.contains('\0') {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "string contains embedded null",
+            ));
+        }
+        self.params.put(name.as_bytes());
+        self.params.put(&b"\0"[..]);
+        self.params.put(value.as_bytes());
+        self.params.put(&b"\0"[..]);
+        Ok(())
+    }
+
+    pub fn str_iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        let params =
+            std::str::from_utf8(&self.params).expect("should be validated as utf8 already");
+        StrParamsIter(params)
+    }
+
+    /// Get parameter's value by its name.
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.str_iter().find_map(|(k, v)| (k == name).then_some(v))
+    }
+}
+
+struct StrParamsIter<'a>(&'a str);
+
+impl<'a> Iterator for StrParamsIter<'a> {
+    type Item = (&'a str, &'a str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (key, r) = self.0.split_once('\0')?;
+        let (value, r) = r.split_once('\0')?;
+        self.0 = r;
+        Some((key, value))
+    }
 }
 
 #[inline]
