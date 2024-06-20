@@ -166,6 +166,20 @@ async fn pipelined_prepare() {
     assert_eq!(statement2.columns()[0].type_(), &Type::INT8);
 }
 
+// regression: https://github.com/neondatabase/neon/issues/1287#issuecomment-1251922486
+#[tokio::test]
+#[cfg(feature = "with-serde_json-1")]
+async fn custom_params() {
+    let client = connect("user=postgres IntervalStyle=iso_8601").await;
+
+    let row = client
+        .query_one("select to_json('0 seconds'::interval)", &[])
+        .await
+        .unwrap();
+
+    assert_eq!(row.get::<_, serde_json_1::Value>(0), "PT0S");
+}
+
 #[tokio::test]
 async fn insert_select() {
     let client = connect("user=postgres").await;

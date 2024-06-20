@@ -10,6 +10,7 @@ use crate::tls::TlsConnect;
 #[cfg(feature = "runtime")]
 use crate::Socket;
 use crate::{Client, Connection, Error};
+use postgres_protocol::message::frontend::StartupMessageParams;
 use std::borrow::Cow;
 #[cfg(unix)]
 use std::ffi::OsStr;
@@ -170,12 +171,7 @@ pub enum AuthKeys {
 /// ```
 #[derive(Clone, PartialEq, Eq)]
 pub struct Config {
-    pub(crate) user: Option<String>,
-    pub(crate) password: Option<Vec<u8>>,
-    pub(crate) auth_keys: Option<Box<AuthKeys>>,
-    pub(crate) dbname: Option<String>,
-    pub(crate) options: Option<String>,
-    pub(crate) application_name: Option<String>,
+    pub(crate) auth: Option<Auth>,
     pub(crate) ssl_mode: SslMode,
     pub(crate) host: Vec<Host>,
     pub(crate) port: Vec<u16>,
@@ -184,8 +180,18 @@ pub struct Config {
     pub(crate) keepalive_config: KeepaliveConfig,
     pub(crate) target_session_attrs: TargetSessionAttrs,
     pub(crate) channel_binding: ChannelBinding,
-    pub(crate) replication_mode: Option<ReplicationMode>,
     pub(crate) max_backend_message_size: Option<usize>,
+    pub(crate) server_settings: StartupMessageParams,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+#[non_exhaustive]
+/// What auth info to use when authenticating
+pub enum Auth {
+    /// password based auth
+    Password(Vec<u8>),
+    /// precomputed scram based auth
+    AuthKeys(AuthKeys),
 }
 
 impl Default for Config {
@@ -203,12 +209,7 @@ impl Config {
             retries: None,
         };
         Config {
-            user: None,
-            password: None,
-            auth_keys: None,
-            dbname: None,
-            options: None,
-            application_name: None,
+            auth: None,
             ssl_mode: SslMode::Prefer,
             host: vec![],
             port: vec![],
@@ -217,8 +218,8 @@ impl Config {
             keepalive_config,
             target_session_attrs: TargetSessionAttrs::Any,
             channel_binding: ChannelBinding::Prefer,
-            replication_mode: None,
             max_backend_message_size: None,
+            server_settings: StartupMessageParams::default(),
         }
     }
 
@@ -226,14 +227,14 @@ impl Config {
     ///
     /// Required.
     pub fn user(&mut self, user: &str) -> &mut Config {
-        self.user = Some(user.to_string());
+        self.server_settings.insert("user", user).unwrap();
         self
     }
 
     /// Gets the user to authenticate with, if one has been configured with
     /// the `user` method.
     pub fn get_user(&self) -> Option<&str> {
-        self.user.as_deref()
+        self.server_settings.get("user")
     }
 
     /// Sets the password to authenticate with.
@@ -241,66 +242,58 @@ impl Config {
     where
         T: AsRef<[u8]>,
     {
-        self.password = Some(password.as_ref().to_vec());
+        self.auth = Some(Auth::Password(password.as_ref().to_vec()));
         self
     }
 
     /// Gets the password to authenticate with, if one has been configured with
     /// the `password` method.
-    pub fn get_password(&self) -> Option<&[u8]> {
-        self.password.as_deref()
+    pub fn get_auth(&self) -> Option<Auth> {
+        self.auth.clone()
+    }
+
+    /// Sets precomputed protocol-specific keys to authenticate with.
+    /// When set, this option will override `password`.
+    /// See [`AuthKeys`] for more information.
+    pub fn auth(&mut self, keys: Auth) -> &mut Config {
+        self.auth = Some(keys);
+        self
     }
 
     /// Sets precomputed protocol-specific keys to authenticate with.
     /// When set, this option will override `password`.
     /// See [`AuthKeys`] for more information.
     pub fn auth_keys(&mut self, keys: AuthKeys) -> &mut Config {
-        self.auth_keys = Some(Box::new(keys));
+        self.auth = Some(Auth::AuthKeys(keys));
         self
-    }
-
-    /// Gets precomputed protocol-specific keys to authenticate with.
-    /// if one has been configured with the `auth_keys` method.
-    pub fn get_auth_keys(&self) -> Option<AuthKeys> {
-        self.auth_keys.as_deref().copied()
     }
 
     /// Sets the name of the database to connect to.
     ///
     /// Defaults to the user.
     pub fn dbname(&mut self, dbname: &str) -> &mut Config {
-        self.dbname = Some(dbname.to_string());
+        self.server_settings.insert("database", dbname).unwrap();
         self
     }
 
     /// Gets the name of the database to connect to, if one has been configured
     /// with the `dbname` method.
     pub fn get_dbname(&self) -> Option<&str> {
-        self.dbname.as_deref()
+        self.server_settings.get("database")
     }
 
     /// Sets command line options used to configure the server.
     pub fn options(&mut self, options: &str) -> &mut Config {
-        self.options = Some(options.to_string());
+        self.server_settings.insert("options", options).unwrap();
         self
-    }
-
-    /// Gets the command line options used to configure the server, if the
-    /// options have been set with the `options` method.
-    pub fn get_options(&self) -> Option<&str> {
-        self.options.as_deref()
     }
 
     /// Sets the value of the `application_name` runtime parameter.
     pub fn application_name(&mut self, application_name: &str) -> &mut Config {
-        self.application_name = Some(application_name.to_string());
+        self.server_settings
+            .insert("application_name", application_name)
+            .unwrap();
         self
-    }
-
-    /// Gets the value of the `application_name` runtime parameter, if it has
-    /// been set with the `application_name` method.
-    pub fn get_application_name(&self) -> Option<&str> {
-        self.application_name.as_deref()
     }
 
     /// Sets the SSL configuration.
@@ -465,13 +458,16 @@ impl Config {
 
     /// Set replication mode.
     pub fn replication_mode(&mut self, replication_mode: ReplicationMode) -> &mut Config {
-        self.replication_mode = Some(replication_mode);
+        match replication_mode {
+            ReplicationMode::Physical => {
+                self.server_settings.insert("replication", "true").unwrap()
+            }
+            ReplicationMode::Logical => self
+                .server_settings
+                .insert("replication", "database")
+                .unwrap(),
+        }
         self
-    }
-
-    /// Get replication mode.
-    pub fn get_replication_mode(&self) -> Option<ReplicationMode> {
-        self.replication_mode
     }
 
     /// Set limit for backend messages size.
@@ -485,7 +481,8 @@ impl Config {
         self.max_backend_message_size
     }
 
-    fn param(&mut self, key: &str, value: &str) -> Result<(), Error> {
+    /// Set an arbitrary param
+    pub fn param(&mut self, key: &str, value: &str) -> Result<(), Error> {
         match key {
             "user" => {
                 self.user(value);
@@ -495,12 +492,6 @@ impl Config {
             }
             "dbname" => {
                 self.dbname(value);
-            }
-            "options" => {
-                self.options(value);
-            }
-            "application_name" => {
-                self.application_name(value);
             }
             "sslmode" => {
                 let mode = match value {
@@ -588,17 +579,6 @@ impl Config {
                 };
                 self.channel_binding(channel_binding);
             }
-            "replication" => {
-                let mode = match value {
-                    "off" => None,
-                    "true" => Some(ReplicationMode::Physical),
-                    "database" => Some(ReplicationMode::Logical),
-                    _ => return Err(Error::config_parse(Box::new(InvalidValue("replication")))),
-                };
-                if let Some(mode) = mode {
-                    self.replication_mode(mode);
-                }
-            }
             "max_backend_message_size" => {
                 let limit = value.parse::<usize>().map_err(|_| {
                     Error::config_parse(Box::new(InvalidValue("max_backend_message_size")))
@@ -608,9 +588,9 @@ impl Config {
                 }
             }
             key => {
-                return Err(Error::config_parse(Box::new(UnknownOption(
-                    key.to_string(),
-                ))));
+                self.server_settings
+                    .insert(key, value)
+                    .map_err(|e| Error::config_parse(e.into()))?;
             }
         }
 
@@ -665,12 +645,8 @@ impl fmt::Debug for Config {
             }
         }
 
-        f.debug_struct("Config")
-            .field("user", &self.user)
-            .field("password", &self.password.as_ref().map(|_| Redaction {}))
-            .field("dbname", &self.dbname)
-            .field("options", &self.options)
-            .field("application_name", &self.application_name)
+        let mut f = f.debug_struct("Config");
+        f.field("auth", &self.auth.as_ref().map(|_| Redaction {}))
             .field("ssl_mode", &self.ssl_mode)
             .field("host", &self.host)
             .field("port", &self.port)
@@ -680,22 +656,15 @@ impl fmt::Debug for Config {
             .field("keepalives_interval", &self.keepalive_config.interval)
             .field("keepalives_retries", &self.keepalive_config.retries)
             .field("target_session_attrs", &self.target_session_attrs)
-            .field("channel_binding", &self.channel_binding)
-            .field("replication", &self.replication_mode)
-            .finish()
+            .field("channel_binding", &self.channel_binding);
+
+        for (k, v) in self.server_settings.str_iter() {
+            f.field(k, &v);
+        }
+
+        f.finish()
     }
 }
-
-#[derive(Debug)]
-struct UnknownOption(String);
-
-impl fmt::Display for UnknownOption {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(fmt, "unknown option `{}`", self.0)
-    }
-}
-
-impl error::Error for UnknownOption {}
 
 #[derive(Debug)]
 struct InvalidValue(&'static str);

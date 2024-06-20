@@ -145,24 +145,12 @@ impl Config {
         self
     }
 
-    /// Gets the password to authenticate with, if one has been configured with
-    /// the `password` method.
-    pub fn get_password(&self) -> Option<&[u8]> {
-        self.config.get_password()
-    }
-
     /// Sets precomputed protocol-specific keys to authenticate with.
     /// When set, this option will override `password`.
     /// See [`AuthKeys`] for more information.
     pub fn auth_keys(&mut self, keys: AuthKeys) -> &mut Config {
         self.config.auth_keys(keys);
         self
-    }
-
-    /// Gets precomputed protocol-specific keys to authenticate with.
-    /// if one has been configured with the `auth_keys` method.
-    pub fn get_auth_keys(&self) -> Option<AuthKeys> {
-        self.config.get_auth_keys()
     }
 
     /// Sets the name of the database to connect to.
@@ -185,22 +173,10 @@ impl Config {
         self
     }
 
-    /// Gets the command line options used to configure the server, if the
-    /// options have been set with the `options` method.
-    pub fn get_options(&self) -> Option<&str> {
-        self.config.get_options()
-    }
-
     /// Sets the value of the `application_name` runtime parameter.
     pub fn application_name(&mut self, application_name: &str) -> &mut Config {
         self.config.application_name(application_name);
         self
-    }
-
-    /// Gets the value of the `application_name` runtime parameter, if it has
-    /// been set with the `application_name` method.
-    pub fn get_application_name(&self) -> Option<&str> {
-        self.config.get_application_name()
     }
 
     /// Sets the SSL configuration.
