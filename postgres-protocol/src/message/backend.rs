@@ -457,7 +457,7 @@ impl AuthenticationGssContinueBody {
     }
 }
 
-pub struct AuthenticationSaslBody(Bytes);
+pub struct AuthenticationSaslBody(pub Bytes);
 
 impl AuthenticationSaslBody {
     #[inline]

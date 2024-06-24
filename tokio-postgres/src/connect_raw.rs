@@ -136,48 +136,53 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
     T: TlsStream + Unpin,
 {
-    match stream.try_next().await.map_err(Error::io)? {
-        Some(Message::AuthenticationOk) => {
-            can_skip_channel_binding(config)?;
-            return Ok(());
-        }
-        Some(Message::AuthenticationCleartextPassword) => {
-            can_skip_channel_binding(config)?;
-
-            match &config.auth {
-                Some(Auth::Password(pass)) => authenticate_password(stream, pass).await?,
-                _ => return Err(Error::config("password missing".into())),
+    // we must be expecting scram
+    if let Some(Auth::AuthKeys(_)) = &config.auth {
+        authenticate_sasl(stream, None, config).await?;
+    } else {
+        match stream.try_next().await.map_err(Error::io)? {
+            Some(Message::AuthenticationOk) => {
+                can_skip_channel_binding(config)?;
+                return Ok(());
             }
-        }
-        Some(Message::AuthenticationMd5Password(body)) => {
-            can_skip_channel_binding(config)?;
+            Some(Message::AuthenticationCleartextPassword) => {
+                can_skip_channel_binding(config)?;
 
-            let user = config
-                .get_user()
-                .ok_or_else(|| Error::config("user missing".into()))?;
-
-            match &config.auth {
-                Some(Auth::Password(pass)) => {
-                    let output = authentication::md5_hash(user.as_bytes(), pass, body.salt());
-                    authenticate_password(stream, output.as_bytes()).await?;
+                match &config.auth {
+                    Some(Auth::Password(pass)) => authenticate_password(stream, pass).await?,
+                    _ => return Err(Error::config("password missing".into())),
                 }
-                _ => return Err(Error::config("password missing".into())),
             }
+            Some(Message::AuthenticationMd5Password(body)) => {
+                can_skip_channel_binding(config)?;
+
+                let user = config
+                    .get_user()
+                    .ok_or_else(|| Error::config("user missing".into()))?;
+
+                match &config.auth {
+                    Some(Auth::Password(pass)) => {
+                        let output = authentication::md5_hash(user.as_bytes(), pass, body.salt());
+                        authenticate_password(stream, output.as_bytes()).await?;
+                    }
+                    _ => return Err(Error::config("password missing".into())),
+                }
+            }
+            Some(Message::AuthenticationSasl(body)) => {
+                authenticate_sasl(stream, Some(body), config).await?;
+            }
+            Some(Message::AuthenticationKerberosV5)
+            | Some(Message::AuthenticationScmCredential)
+            | Some(Message::AuthenticationGss)
+            | Some(Message::AuthenticationSspi) => {
+                return Err(Error::authentication(
+                    "unsupported authentication method".into(),
+                ))
+            }
+            Some(Message::ErrorResponse(body)) => return Err(Error::db(body)),
+            Some(_) => return Err(Error::unexpected_message()),
+            None => return Err(Error::closed()),
         }
-        Some(Message::AuthenticationSasl(body)) => {
-            authenticate_sasl(stream, body, config).await?;
-        }
-        Some(Message::AuthenticationKerberosV5)
-        | Some(Message::AuthenticationScmCredential)
-        | Some(Message::AuthenticationGss)
-        | Some(Message::AuthenticationSspi) => {
-            return Err(Error::authentication(
-                "unsupported authentication method".into(),
-            ))
-        }
-        Some(Message::ErrorResponse(body)) => return Err(Error::db(body)),
-        Some(_) => return Err(Error::unexpected_message()),
-        None => return Err(Error::closed()),
     }
 
     match stream.try_next().await.map_err(Error::io)? {
@@ -216,7 +221,7 @@ where
 
 async fn authenticate_sasl<S, T>(
     stream: &mut StartupStream<S, T>,
-    body: AuthenticationSaslBody,
+    body: Option<AuthenticationSaslBody>,
     config: &Config,
 ) -> Result<(), Error>
 where
@@ -225,13 +230,18 @@ where
 {
     let mut has_scram = false;
     let mut has_scram_plus = false;
-    let mut mechanisms = body.mechanisms();
-    while let Some(mechanism) = mechanisms.next().map_err(Error::parse)? {
-        match mechanism {
-            sasl::SCRAM_SHA_256 => has_scram = true,
-            sasl::SCRAM_SHA_256_PLUS => has_scram_plus = true,
-            _ => {}
+    if let Some(body) = &body {
+        let mut mechanisms = body.mechanisms();
+        while let Some(mechanism) = mechanisms.next().map_err(Error::parse)? {
+            match mechanism {
+                sasl::SCRAM_SHA_256 => has_scram = true,
+                sasl::SCRAM_SHA_256_PLUS => has_scram_plus = true,
+                _ => {}
+            }
         }
+    } else {
+        has_scram = true;
+        has_scram_plus = false;
     }
 
     let channel_binding = stream
@@ -274,6 +284,17 @@ where
         .send(FrontendMessage::Raw(buf.freeze()))
         .await
         .map_err(Error::io)?;
+
+    // we skipped the prior auth negotiation step
+    if body.is_none() {
+        match stream.try_next().await.map_err(Error::io)? {
+            Some(Message::AuthenticationSasl(AuthenticationSaslBody(body))) => {
+                log::debug!("skipped sasl negotiation: {body:?}")
+            }
+            Some(_) => return Err(Error::unexpected_message()),
+            None => return Err(Error::closed()),
+        };
+    }
 
     let body = match stream.try_next().await.map_err(Error::io)? {
         Some(Message::AuthenticationSaslContinue(body)) => body,
