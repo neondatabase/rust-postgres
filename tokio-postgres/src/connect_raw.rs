@@ -1,5 +1,5 @@
 use crate::codec::{BackendMessage, BackendMessages, FrontendMessage, PostgresCodec};
-use crate::config::{self, Auth, AuthKeys, Config};
+use crate::config::{self, AuthKeys, Config, ReplicationMode};
 use crate::connect_tls::connect_tls;
 use crate::maybe_tls_stream::MaybeTlsStream;
 use crate::tls::{TlsConnect, TlsStream};
@@ -116,14 +116,28 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    // leave for user to provide:
-    // let mut params = config.server_settings.clone();
-    // params
-    //     .insert("client_encoding", "UTF8")
-    //     .map_err(Error::encode)?;
+    let mut params = vec![("client_encoding", "UTF8")];
+    if let Some(user) = &config.user {
+        params.push(("user", &**user));
+    }
+    if let Some(dbname) = &config.dbname {
+        params.push(("database", &**dbname));
+    }
+    if let Some(options) = &config.options {
+        params.push(("options", &**options));
+    }
+    if let Some(application_name) = &config.application_name {
+        params.push(("application_name", &**application_name));
+    }
+    if let Some(replication_mode) = &config.replication_mode {
+        match replication_mode {
+            ReplicationMode::Physical => params.push(("replication", "true")),
+            ReplicationMode::Logical => params.push(("replication", "database")),
+        }
+    }
 
     let mut buf = BytesMut::new();
-    frontend::startup_message_cstr(&config.server_settings, &mut buf).map_err(Error::encode)?;
+    frontend::startup_message(params, &mut buf).map_err(Error::encode)?;
 
     stream
         .send(FrontendMessage::Raw(buf.freeze()))
@@ -144,25 +158,27 @@ where
         Some(Message::AuthenticationCleartextPassword) => {
             can_skip_channel_binding(config)?;
 
-            match &config.auth {
-                Some(Auth::Password(pass)) => authenticate_password(stream, pass).await?,
-                _ => return Err(Error::config("password missing".into())),
-            }
+            let pass = config
+                .password
+                .as_ref()
+                .ok_or_else(|| Error::config("password missing".into()))?;
+
+            authenticate_password(stream, pass).await?;
         }
         Some(Message::AuthenticationMd5Password(body)) => {
             can_skip_channel_binding(config)?;
 
             let user = config
-                .get_user()
+                .user
+                .as_ref()
                 .ok_or_else(|| Error::config("user missing".into()))?;
+            let pass = config
+                .password
+                .as_ref()
+                .ok_or_else(|| Error::config("password missing".into()))?;
 
-            match &config.auth {
-                Some(Auth::Password(pass)) => {
-                    let output = authentication::md5_hash(user.as_bytes(), pass, body.salt());
-                    authenticate_password(stream, output.as_bytes()).await?;
-                }
-                _ => return Err(Error::config("password missing".into())),
-            }
+            let output = authentication::md5_hash(user.as_bytes(), pass, body.salt());
+            authenticate_password(stream, output.as_bytes()).await?;
         }
         Some(Message::AuthenticationSasl(body)) => {
             authenticate_sasl(stream, body, config).await?;
@@ -260,12 +276,12 @@ where
         can_skip_channel_binding(config)?;
     }
 
-    let mut scram = match &config.auth {
-        Some(Auth::AuthKeys(AuthKeys::ScramSha256(keys))) => {
-            ScramSha256::new_with_keys(*keys, channel_binding)
-        }
-        Some(Auth::Password(password)) => ScramSha256::new(password, channel_binding),
-        None => return Err(Error::config("password or auth keys missing".into())),
+    let mut scram = if let Some(AuthKeys::ScramSha256(keys)) = config.get_auth_keys() {
+        ScramSha256::new_with_keys(keys, channel_binding)
+    } else if let Some(password) = config.get_password() {
+        ScramSha256::new(password, channel_binding)
+    } else {
+        return Err(Error::config("password or auth keys missing".into()));
     };
 
     let mut buf = BytesMut::new();
