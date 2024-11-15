@@ -375,9 +375,15 @@ impl ReplicationMessage<Bytes> {
             INTERPRETED_WAL_RECORD_TAG => {
                 let streaming_lsn = buf.read_u64::<BigEndian>()?;
                 let wal_end = buf.read_u64::<BigEndian>()?;
+                let next_record_lsn = match buf.read_u64::<BigEndian>()? {
+                    0 => None,
+                    lsn => Some(lsn),
+                };
+
                 ReplicationMessage::RawInterpretedWalRecords(RawInterpretedWalRecordsBody {
                     streaming_lsn,
                     wal_end,
+                    next_record_lsn,
                     data: buf.read_all(),
                 })
             }
@@ -965,6 +971,7 @@ impl<D> XLogDataBody<D> {
 pub struct RawInterpretedWalRecordsBody<D> {
     streaming_lsn: u64,
     wal_end: u64,
+    next_record_lsn: Option<u64>,
     data: D,
 }
 
@@ -977,6 +984,11 @@ impl<D> RawInterpretedWalRecordsBody<D> {
     #[inline]
     pub fn wal_end(&self) -> u64 {
         self.wal_end
+    }
+
+    #[inline]
+    pub fn next_record_lsn(&self) -> Option<u64> {
+        self.next_record_lsn
     }
 
     #[inline]
