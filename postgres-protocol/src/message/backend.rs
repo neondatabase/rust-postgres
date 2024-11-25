@@ -39,6 +39,7 @@ pub const READY_FOR_QUERY_TAG: u8 = b'Z';
 // replication message tags
 pub const XLOG_DATA_TAG: u8 = b'w';
 pub const PRIMARY_KEEPALIVE_TAG: u8 = b'k';
+pub const INTERPRETED_WAL_RECORD_TAG: u8 = b'0';
 
 // logical replication message tags
 const BEGIN_TAG: u8 = b'B';
@@ -325,6 +326,7 @@ impl Message {
 pub enum ReplicationMessage<D> {
     XLogData(XLogDataBody<D>),
     PrimaryKeepAlive(PrimaryKeepAliveBody),
+    RawInterpretedWalRecords(RawInterpretedWalRecordsBody<D>),
 }
 
 impl ReplicationMessage<Bytes> {
@@ -368,6 +370,21 @@ impl ReplicationMessage<Bytes> {
                     wal_end,
                     timestamp,
                     reply,
+                })
+            }
+            INTERPRETED_WAL_RECORD_TAG => {
+                let streaming_lsn = buf.read_u64::<BigEndian>()?;
+                let commit_lsn = buf.read_u64::<BigEndian>()?;
+                let next_record_lsn = match buf.read_u64::<BigEndian>()? {
+                    0 => None,
+                    lsn => Some(lsn),
+                };
+
+                ReplicationMessage::RawInterpretedWalRecords(RawInterpretedWalRecordsBody {
+                    streaming_lsn,
+                    commit_lsn,
+                    next_record_lsn,
+                    data: buf.read_all(),
                 })
             }
             tag => {
@@ -958,6 +975,36 @@ impl<D> XLogDataBody<D> {
             timestamp: self.timestamp,
             data,
         })
+    }
+}
+
+#[derive(Debug)]
+pub struct RawInterpretedWalRecordsBody<D> {
+    streaming_lsn: u64,
+    commit_lsn: u64,
+    next_record_lsn: Option<u64>,
+    data: D,
+}
+
+impl<D> RawInterpretedWalRecordsBody<D> {
+    #[inline]
+    pub fn streaming_lsn(&self) -> u64 {
+        self.streaming_lsn
+    }
+
+    #[inline]
+    pub fn commit_lsn(&self) -> u64 {
+        self.commit_lsn
+    }
+
+    #[inline]
+    pub fn next_record_lsn(&self) -> Option<u64> {
+        self.next_record_lsn
+    }
+
+    #[inline]
+    pub fn data(&self) -> &D {
+        &self.data
     }
 }
 
