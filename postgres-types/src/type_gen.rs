@@ -967,7 +967,7 @@ impl Inner {
     }
 }
 impl Type {
-    /// BOOL - boolean, &#39;true&#39;/&#39;false&#39;
+    /// BOOL - boolean, format &#39;t&#39;/&#39;f&#39;
     pub const BOOL: Type = Type(Inner::Bool);
 
     /// BYTEA - variable-length string, binary values escaped
@@ -1000,7 +1000,7 @@ impl Type {
     /// OID - object identifier&#40;oid&#41;, maximum 4 billion
     pub const OID: Type = Type(Inner::Oid);
 
-    /// TID - &#40;block, offset&#41;, physical location of tuple
+    /// TID - tuple physical location, format &#39;&#40;block,offset&#41;&#39;
     pub const TID: Type = Type(Inner::Tid);
 
     /// XID - transaction id
@@ -1030,7 +1030,7 @@ impl Type {
     /// JSON&#91;&#93;
     pub const JSON_ARRAY: Type = Type(Inner::JsonArray);
 
-    /// TABLE_AM_HANDLER
+    /// TABLE_AM_HANDLER - pseudo-type for the result of a table AM handler function
     pub const TABLE_AM_HANDLER: Type = Type(Inner::TableAmHandler);
 
     /// XID8&#91;&#93;
@@ -1039,22 +1039,22 @@ impl Type {
     /// INDEX_AM_HANDLER - pseudo-type for the result of an index AM handler function
     pub const INDEX_AM_HANDLER: Type = Type(Inner::IndexAmHandler);
 
-    /// POINT - geometric point &#39;&#40;x, y&#41;&#39;
+    /// POINT - geometric point, format &#39;&#40;x,y&#41;&#39;
     pub const POINT: Type = Type(Inner::Point);
 
-    /// LSEG - geometric line segment &#39;&#40;pt1,pt2&#41;&#39;
+    /// LSEG - geometric line segment, format &#39;&#91;point1,point2&#93;&#39;
     pub const LSEG: Type = Type(Inner::Lseg);
 
-    /// PATH - geometric path &#39;&#40;pt1,...&#41;&#39;
+    /// PATH - geometric path, format &#39;&#40;point1,...&#41;&#39;
     pub const PATH: Type = Type(Inner::Path);
 
-    /// BOX - geometric box &#39;&#40;lower left,upper right&#41;&#39;
+    /// BOX - geometric box, format &#39;lower left point,upper right point&#39;
     pub const BOX: Type = Type(Inner::Box);
 
-    /// POLYGON - geometric polygon &#39;&#40;pt1,...&#41;&#39;
+    /// POLYGON - geometric polygon, format &#39;&#40;point1,...&#41;&#39;
     pub const POLYGON: Type = Type(Inner::Polygon);
 
-    /// LINE - geometric line
+    /// LINE - geometric line, formats &#39;&#123;A,B,C&#125;&#39;/&#39;&#91;point1,point2&#93;&#39;
     pub const LINE: Type = Type(Inner::Line);
 
     /// LINE&#91;&#93;
@@ -1075,7 +1075,7 @@ impl Type {
     /// UNKNOWN - pseudo-type representing an undetermined type
     pub const UNKNOWN: Type = Type(Inner::Unknown);
 
-    /// CIRCLE - geometric circle &#39;&#40;center,radius&#41;&#39;
+    /// CIRCLE - geometric circle, format &#39;&lt;center point,radius&gt;&#39;
     pub const CIRCLE: Type = Type(Inner::Circle);
 
     /// CIRCLE&#91;&#93;
@@ -1183,10 +1183,10 @@ impl Type {
     /// INET&#91;&#93;
     pub const INET_ARRAY: Type = Type(Inner::InetArray);
 
-    /// BPCHAR - char&#40;length&#41;, blank-padded string, fixed storage length
+    /// BPCHAR - &#39;char&#40;length&#41;&#39; blank-padded string, fixed storage length
     pub const BPCHAR: Type = Type(Inner::Bpchar);
 
-    /// VARCHAR - varchar&#40;length&#41;, non-blank-padded string, variable storage length
+    /// VARCHAR - &#39;varchar&#40;length&#41;&#39; non-blank-padded string, variable storage length
     pub const VARCHAR: Type = Type(Inner::Varchar);
 
     /// DATE - date
@@ -1213,7 +1213,7 @@ impl Type {
     /// TIMESTAMPTZ&#91;&#93;
     pub const TIMESTAMPTZ_ARRAY: Type = Type(Inner::TimestamptzArray);
 
-    /// INTERVAL - &#64; &lt;number&gt; &lt;units&gt;, time interval
+    /// INTERVAL - time interval, format &#39;number units ...&#39;
     pub const INTERVAL: Type = Type(Inner::Interval);
 
     /// INTERVAL&#91;&#93;
@@ -1243,7 +1243,7 @@ impl Type {
     /// VARBIT&#91;&#93;
     pub const VARBIT_ARRAY: Type = Type(Inner::VarbitArray);
 
-    /// NUMERIC - numeric&#40;precision, decimal&#41;, arbitrary precision number
+    /// NUMERIC - &#39;numeric&#40;precision, scale&#41;&#39; arbitrary precision number
     pub const NUMERIC: Type = Type(Inner::Numeric);
 
     /// REFCURSOR - reference to cursor &#40;portal name&#41;
@@ -1318,19 +1318,19 @@ impl Type {
     /// TXID_SNAPSHOT&#91;&#93;
     pub const TXID_SNAPSHOT_ARRAY: Type = Type(Inner::TxidSnapshotArray);
 
-    /// UUID - UUID datatype
+    /// UUID - UUID
     pub const UUID: Type = Type(Inner::Uuid);
 
     /// UUID&#91;&#93;
     pub const UUID_ARRAY: Type = Type(Inner::UuidArray);
 
-    /// TXID_SNAPSHOT - txid snapshot
+    /// TXID_SNAPSHOT - transaction snapshot
     pub const TXID_SNAPSHOT: Type = Type(Inner::TxidSnapshot);
 
     /// FDW_HANDLER - pseudo-type for the result of an FDW handler function
     pub const FDW_HANDLER: Type = Type(Inner::FdwHandler);
 
-    /// PG_LSN - PostgreSQL LSN datatype
+    /// PG_LSN - PostgreSQL LSN
     pub const PG_LSN: Type = Type(Inner::PgLsn);
 
     /// PG_LSN&#91;&#93;
@@ -1474,16 +1474,16 @@ impl Type {
     /// ANYCOMPATIBLEMULTIRANGE - pseudo-type representing a multirange over a polymorphic common type
     pub const ANYCOMPATIBLEMULTI_RANGE: Type = Type(Inner::AnycompatiblemultiRange);
 
-    /// PG_BRIN_BLOOM_SUMMARY - BRIN bloom summary
+    /// PG_BRIN_BLOOM_SUMMARY - pseudo-type representing BRIN bloom summary
     pub const PG_BRIN_BLOOM_SUMMARY: Type = Type(Inner::PgBrinBloomSummary);
 
-    /// PG_BRIN_MINMAX_MULTI_SUMMARY - BRIN minmax-multi summary
+    /// PG_BRIN_MINMAX_MULTI_SUMMARY - pseudo-type representing BRIN minmax-multi summary
     pub const PG_BRIN_MINMAX_MULTI_SUMMARY: Type = Type(Inner::PgBrinMinmaxMultiSummary);
 
     /// PG_MCV_LIST - multivariate MCV list
     pub const PG_MCV_LIST: Type = Type(Inner::PgMcvList);
 
-    /// PG_SNAPSHOT - snapshot
+    /// PG_SNAPSHOT - transaction snapshot
     pub const PG_SNAPSHOT: Type = Type(Inner::PgSnapshot);
 
     /// PG_SNAPSHOT&#91;&#93;
