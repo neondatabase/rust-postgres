@@ -11,7 +11,6 @@ keywords = ["database", "postgres", "postgresql", "sql"]
 categories = ["database"]
 
 [features]
-derive = ["postgres-derive"]
 array-impls = ["array-init"]
 with-bit-vec-0_6 = ["bit-vec-06"]
 with-cidr-0_2 = ["cidr-02"]
@@ -30,7 +29,6 @@ with-time-0_3 = ["time-03"]
 bytes = "1.0"
 fallible-iterator = "0.2"
 postgres-protocol = { version = "0.6.4", path = "../postgres-protocol" }
-postgres-derive = { version = "0.4.2", optional = true, path = "../postgres-derive" }
 
 array-init = { version = "2", optional = true }
 bit-vec-06 = { version = "0.6", package = "bit-vec", optional = true }
