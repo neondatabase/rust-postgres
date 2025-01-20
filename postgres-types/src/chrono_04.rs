@@ -14,7 +14,7 @@ fn base() -> NaiveDateTime {
         .unwrap()
 }
 
-impl<'a> FromSql<'a> for NaiveDateTime {
+impl FromSql<'_> for NaiveDateTime {
     fn from_sql(_: &Type, raw: &[u8]) -> Result<NaiveDateTime, Box<dyn Error + Sync + Send>> {
         let t = types::timestamp_from_sql(raw)?;
         base()
@@ -39,7 +39,7 @@ impl ToSql for NaiveDateTime {
     to_sql_checked!();
 }
 
-impl<'a> FromSql<'a> for DateTime<Utc> {
+impl FromSql<'_> for DateTime<Utc> {
     fn from_sql(type_: &Type, raw: &[u8]) -> Result<DateTime<Utc>, Box<dyn Error + Sync + Send>> {
         let naive = NaiveDateTime::from_sql(type_, raw)?;
         Ok(Utc.from_utc_datetime(&naive))
@@ -61,7 +61,7 @@ impl ToSql for DateTime<Utc> {
     to_sql_checked!();
 }
 
-impl<'a> FromSql<'a> for DateTime<Local> {
+impl FromSql<'_> for DateTime<Local> {
     fn from_sql(type_: &Type, raw: &[u8]) -> Result<DateTime<Local>, Box<dyn Error + Sync + Send>> {
         let utc = DateTime::<Utc>::from_sql(type_, raw)?;
         Ok(utc.with_timezone(&Local))
@@ -83,7 +83,7 @@ impl ToSql for DateTime<Local> {
     to_sql_checked!();
 }
 
-impl<'a> FromSql<'a> for DateTime<FixedOffset> {
+impl FromSql<'_> for DateTime<FixedOffset> {
     fn from_sql(
         type_: &Type,
         raw: &[u8],
@@ -108,7 +108,7 @@ impl ToSql for DateTime<FixedOffset> {
     to_sql_checked!();
 }
 
-impl<'a> FromSql<'a> for NaiveDate {
+impl FromSql<'_> for NaiveDate {
     fn from_sql(_: &Type, raw: &[u8]) -> Result<NaiveDate, Box<dyn Error + Sync + Send>> {
         let jd = types::date_from_sql(raw)?;
         base()
@@ -123,7 +123,7 @@ impl<'a> FromSql<'a> for NaiveDate {
 impl ToSql for NaiveDate {
     fn to_sql(&self, _: &Type, w: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
         let jd = self.signed_duration_since(base().date()).num_days();
-        if jd > i64::from(i32::max_value()) || jd < i64::from(i32::min_value()) {
+        if jd > i64::from(i32::MAX) || jd < i64::from(i32::MIN) {
             return Err("value too large to transmit".into());
         }
 
@@ -135,7 +135,7 @@ impl ToSql for NaiveDate {
     to_sql_checked!();
 }
 
-impl<'a> FromSql<'a> for NaiveTime {
+impl FromSql<'_> for NaiveTime {
     fn from_sql(_: &Type, raw: &[u8]) -> Result<NaiveTime, Box<dyn Error + Sync + Send>> {
         let usec = types::time_from_sql(raw)?;
         Ok(NaiveTime::from_hms_opt(0, 0, 0).unwrap() + Duration::microseconds(usec))
