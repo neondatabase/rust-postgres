@@ -11,6 +11,7 @@ keywords = ["database", "postgres", "postgresql", "sql"]
 categories = ["database"]
 
 [features]
+default = ["with-chrono-0_4"]
 derive = ["postgres-derive"]
 array-impls = ["array-init"]
 with-bit-vec-0_6 = ["bit-vec-06"]
