@@ -66,10 +66,10 @@ pub trait GenericClient: private::Sealed {
         parameter_types: &[Type],
     ) -> Result<Statement, Error>;
 
-    /// Like `Client::transaction`.
-    async fn transaction(&mut self) -> Result<Transaction<'_>, Error>;
+    /// Like [`Client::transaction`].
+    async fn transaction<'a>(&'a mut self) -> Result<Transaction<'a>, Error>;
 
-    /// Like `Client::batch_execute`.
+    /// Like [`Client::batch_execute`].
     async fn batch_execute(&self, query: &str) -> Result<(), Error>;
 
     /// Returns a reference to the underlying `Client`.
@@ -148,7 +148,7 @@ impl GenericClient for Client {
         self.prepare_typed(query, parameter_types).await
     }
 
-    async fn transaction(&mut self) -> Result<Transaction<'_>, Error> {
+    async fn transaction<'a>(&'a mut self) -> Result<Transaction<'a>, Error> {
         self.transaction().await
     }
 
