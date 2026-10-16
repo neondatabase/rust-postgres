@@ -134,7 +134,7 @@ async fn check_replication(binary: bool) {
     match (&tuple_data[0], binary) {
         (TupleData::Text(data), false) => assert_eq!(data, &b"42"[..]),
         (TupleData::Binary(data), true) => assert_eq!(data, &42i32.to_be_bytes()[..]),
-        (data, _) => panic!("unexpected tuple data: {:?}", data),
+        _ => unreachable!(),
     }
 
     // Send a standby status update and require a keep alive response
