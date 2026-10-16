@@ -16,22 +16,6 @@ async fn test_replication() {
 }
 
 async fn check_replication(binary: bool) {
-    let table = if binary {
-        "test_logical_replication_binary"
-    } else {
-        "test_logical_replication"
-    };
-    let publication = if binary {
-        "test_pub_binary"
-    } else {
-        "test_pub"
-    };
-    let slot = if binary {
-        "test_logical_slot_binary"
-    } else {
-        "test_logical_slot"
-    };
-
     // form SQL connection
     let conninfo = "host=127.0.0.1 port=5433 user=postgres replication=database";
     let (client, connection) = tokio_postgres::connect(conninfo, NoTls).await.unwrap();
@@ -42,15 +26,15 @@ async fn check_replication(binary: bool) {
     });
 
     client
-        .simple_query(&format!("DROP TABLE IF EXISTS {table}"))
+        .simple_query("DROP TABLE IF EXISTS test_logical_replication")
         .await
         .unwrap();
     client
-        .simple_query(&format!("CREATE TABLE {table}(i int)"))
+        .simple_query("CREATE TABLE test_logical_replication(i int)")
         .await
         .unwrap();
     let res = client
-        .simple_query(&format!("SELECT '{table}'::regclass::oid"))
+        .simple_query("SELECT 'test_logical_replication'::regclass::oid")
         .await
         .unwrap();
     let rel_id: u32 = if let Row(row) = &res[0] {
@@ -60,15 +44,15 @@ async fn check_replication(binary: bool) {
     };
 
     client
-        .simple_query(&format!("DROP PUBLICATION IF EXISTS {publication}"))
+        .simple_query("DROP PUBLICATION IF EXISTS test_pub")
         .await
         .unwrap();
     client
-        .simple_query(&format!(
-            "CREATE PUBLICATION {publication} FOR TABLE {table}"
-        ))
+        .simple_query("CREATE PUBLICATION test_pub FOR ALL TABLES")
         .await
         .unwrap();
+
+    let slot = "test_logical_slot";
 
     let query = format!(
         r#"CREATE_REPLICATION_SLOT {:?} TEMPORARY LOGICAL "pgoutput""#,
@@ -83,12 +67,12 @@ async fn check_replication(binary: bool) {
 
     // issue a query that will appear in the slot's stream since it happened after its creation
     client
-        .simple_query(&format!("INSERT INTO {table} VALUES (42)"))
+        .simple_query("INSERT INTO test_logical_replication VALUES (42)")
         .await
         .unwrap();
 
     let options = format!(
-        "(\"proto_version\" '1', \"publication_names\" '{publication}', \"binary\" '{}')",
+        "(\"proto_version\" '1', \"publication_names\" 'test_pub', \"binary\" '{}')",
         binary
     );
     let query = format!(
