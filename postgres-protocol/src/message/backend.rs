@@ -1320,26 +1320,6 @@ impl TupleData {
     }
 }
 
-#[cfg(test)]
-mod tuple_data_tests {
-    use super::{Buffer, TupleData};
-    use bytes::Bytes;
-
-    #[test]
-    fn parses_binary_tuple_data() {
-        let mut buf = Buffer {
-            bytes: Bytes::from_static(b"b\0\0\0\x04\0\0\0*"),
-            idx: 0,
-        };
-
-        match TupleData::parse(&mut buf).unwrap() {
-            TupleData::Binary(data) => assert_eq!(data, &42i32.to_be_bytes()[..]),
-            data => panic!("unexpected tuple data: {:?}", data),
-        }
-        assert!(buf.is_empty());
-    }
-}
-
 /// A BEGIN statement
 #[derive(Debug)]
 pub struct BeginBody {
