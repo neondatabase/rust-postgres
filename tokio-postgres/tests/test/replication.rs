@@ -11,11 +11,11 @@ use tokio_postgres::SimpleQueryMessage::Row;
 
 #[tokio::test]
 async fn test_replication() {
-    check_replication(false).await;
-    check_replication(true).await;
+    test_replication_impl(false).await;
+    test_replication_impl(true).await;
 }
 
-async fn check_replication(binary: bool) {
+async fn test_replication_impl(binary: bool) {
     // form SQL connection
     let conninfo = "host=127.0.0.1 port=5433 user=postgres replication=database";
     let (client, connection) = tokio_postgres::connect(conninfo, NoTls).await.unwrap();
