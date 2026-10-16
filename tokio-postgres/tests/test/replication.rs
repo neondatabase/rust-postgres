@@ -11,6 +11,27 @@ use tokio_postgres::SimpleQueryMessage::Row;
 
 #[tokio::test]
 async fn test_replication() {
+    check_replication(false).await;
+    check_replication(true).await;
+}
+
+async fn check_replication(binary: bool) {
+    let table = if binary {
+        "test_logical_replication_binary"
+    } else {
+        "test_logical_replication"
+    };
+    let publication = if binary {
+        "test_pub_binary"
+    } else {
+        "test_pub"
+    };
+    let slot = if binary {
+        "test_logical_slot_binary"
+    } else {
+        "test_logical_slot"
+    };
+
     // form SQL connection
     let conninfo = "host=127.0.0.1 port=5433 user=postgres replication=database";
     let (client, connection) = tokio_postgres::connect(conninfo, NoTls).await.unwrap();
@@ -21,15 +42,15 @@ async fn test_replication() {
     });
 
     client
-        .simple_query("DROP TABLE IF EXISTS test_logical_replication")
+        .simple_query(&format!("DROP TABLE IF EXISTS {table}"))
         .await
         .unwrap();
     client
-        .simple_query("CREATE TABLE test_logical_replication(i int)")
+        .simple_query(&format!("CREATE TABLE {table}(i int)"))
         .await
         .unwrap();
     let res = client
-        .simple_query("SELECT 'test_logical_replication'::regclass::oid")
+        .simple_query(&format!("SELECT '{table}'::regclass::oid"))
         .await
         .unwrap();
     let rel_id: u32 = if let Row(row) = &res[0] {
@@ -39,15 +60,15 @@ async fn test_replication() {
     };
 
     client
-        .simple_query("DROP PUBLICATION IF EXISTS test_pub")
+        .simple_query(&format!("DROP PUBLICATION IF EXISTS {publication}"))
         .await
         .unwrap();
     client
-        .simple_query("CREATE PUBLICATION test_pub FOR ALL TABLES")
+        .simple_query(&format!(
+            "CREATE PUBLICATION {publication} FOR TABLE {table}"
+        ))
         .await
         .unwrap();
-
-    let slot = "test_logical_slot";
 
     let query = format!(
         r#"CREATE_REPLICATION_SLOT {:?} TEMPORARY LOGICAL "pgoutput""#,
@@ -62,11 +83,14 @@ async fn test_replication() {
 
     // issue a query that will appear in the slot's stream since it happened after its creation
     client
-        .simple_query("INSERT INTO test_logical_replication VALUES (42)")
+        .simple_query(&format!("INSERT INTO {table} VALUES (42)"))
         .await
         .unwrap();
 
-    let options = r#"("proto_version" '1', "publication_names" 'test_pub')"#;
+    let options = format!(
+        "(\"proto_version\" '1', \"publication_names\" '{publication}', \"binary\" '{}')",
+        binary
+    );
     let query = format!(
         r#"START_REPLICATION SLOT {:?} LOGICAL {} {}"#,
         slot, lsn, options
@@ -123,9 +147,10 @@ async fn test_replication() {
 
     let tuple_data = insert.tuple().tuple_data();
     assert_eq!(tuple_data.len(), 1);
-    assert!(matches!(tuple_data[0], TupleData::Text(_)));
-    if let TupleData::Text(data) = &tuple_data[0] {
-        assert_eq!(data, &b"42"[..]);
+    match (&tuple_data[0], binary) {
+        (TupleData::Text(data), false) => assert_eq!(data, &b"42"[..]),
+        (TupleData::Binary(data), true) => assert_eq!(data, &42i32.to_be_bytes()[..]),
+        (data, _) => panic!("unexpected tuple data: {:?}", data),
     }
 
     // Send a standby status update and require a keep alive response

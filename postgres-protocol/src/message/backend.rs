@@ -57,6 +57,7 @@ const TUPLE_OLD_TAG: u8 = b'O';
 const TUPLE_DATA_NULL_TAG: u8 = b'n';
 const TUPLE_DATA_TOAST_TAG: u8 = b'u';
 const TUPLE_DATA_TEXT_TAG: u8 = b't';
+const TUPLE_DATA_BINARY_TAG: u8 = b'b';
 
 // replica identity tags
 const REPLICA_IDENTITY_DEFAULT_TAG: u8 = b'd';
@@ -1286,6 +1287,8 @@ pub enum TupleData {
     UnchangedToast,
     /// Column data as text formatted value.
     Text(Bytes),
+    /// Column data as binary formatted value.
+    Binary(Bytes),
 }
 
 impl TupleData {
@@ -1295,11 +1298,15 @@ impl TupleData {
         let tuple = match type_tag {
             TUPLE_DATA_NULL_TAG => TupleData::Null,
             TUPLE_DATA_TOAST_TAG => TupleData::UnchangedToast,
-            TUPLE_DATA_TEXT_TAG => {
+            TUPLE_DATA_TEXT_TAG | TUPLE_DATA_BINARY_TAG => {
                 let len = buf.read_i32::<BigEndian>()?;
                 let mut data = vec![0; len as usize];
                 buf.read_exact(&mut data)?;
-                TupleData::Text(data.into())
+                if type_tag == TUPLE_DATA_TEXT_TAG {
+                    TupleData::Text(data.into())
+                } else {
+                    TupleData::Binary(data.into())
+                }
             }
             tag => {
                 return Err(io::Error::new(
@@ -1310,6 +1317,26 @@ impl TupleData {
         };
 
         Ok(tuple)
+    }
+}
+
+#[cfg(test)]
+mod tuple_data_tests {
+    use super::{Buffer, TupleData};
+    use bytes::Bytes;
+
+    #[test]
+    fn parses_binary_tuple_data() {
+        let mut buf = Buffer {
+            bytes: Bytes::from_static(b"b\0\0\0\x04\0\0\0*"),
+            idx: 0,
+        };
+
+        match TupleData::parse(&mut buf).unwrap() {
+            TupleData::Binary(data) => assert_eq!(data, &42i32.to_be_bytes()[..]),
+            data => panic!("unexpected tuple data: {:?}", data),
+        }
+        assert!(buf.is_empty());
     }
 }
 
