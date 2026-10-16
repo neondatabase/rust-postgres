@@ -11,8 +11,8 @@ use tokio_postgres::SimpleQueryMessage::Row;
 
 #[tokio::test]
 async fn test_replication() {
-    test_replication_impl(false).await;
-    test_replication_impl(true).await;
+    test_replication_impl(false /*binary*/).await;
+    test_replication_impl(true /*binary*/).await;
 }
 
 async fn test_replication_impl(binary: bool) {
