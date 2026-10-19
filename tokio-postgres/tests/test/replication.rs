@@ -11,6 +11,11 @@ use tokio_postgres::SimpleQueryMessage::Row;
 
 #[tokio::test]
 async fn test_replication() {
+    test_replication_impl(false /*binary*/).await;
+    test_replication_impl(true /*binary*/).await;
+}
+
+async fn test_replication_impl(binary: bool) {
     // form SQL connection
     let conninfo = "host=127.0.0.1 port=5433 user=postgres replication=database";
     let (client, connection) = tokio_postgres::connect(conninfo, NoTls).await.unwrap();
@@ -66,7 +71,10 @@ async fn test_replication() {
         .await
         .unwrap();
 
-    let options = r#"("proto_version" '1', "publication_names" 'test_pub')"#;
+    let options = format!(
+        "(\"proto_version\" '1', \"publication_names\" 'test_pub', \"binary\" '{}')",
+        binary
+    );
     let query = format!(
         r#"START_REPLICATION SLOT {:?} LOGICAL {} {}"#,
         slot, lsn, options
@@ -123,9 +131,10 @@ async fn test_replication() {
 
     let tuple_data = insert.tuple().tuple_data();
     assert_eq!(tuple_data.len(), 1);
-    assert!(matches!(tuple_data[0], TupleData::Text(_)));
-    if let TupleData::Text(data) = &tuple_data[0] {
-        assert_eq!(data, &b"42"[..]);
+    match (&tuple_data[0], binary) {
+        (TupleData::Text(data), false) => assert_eq!(data, &b"42"[..]),
+        (TupleData::Binary(data), true) => assert_eq!(data, &42i32.to_be_bytes()[..]),
+        _ => unreachable!(),
     }
 
     // Send a standby status update and require a keep alive response
