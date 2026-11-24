@@ -5,9 +5,9 @@ use postgres_protocol::message::backend::LogicalReplicationMessage::{Begin, Comm
 use postgres_protocol::message::backend::ReplicationMessage::*;
 use postgres_protocol::message::backend::TupleData;
 use postgres_types::PgLsn;
-use tokio_postgres::replication::LogicalReplicationStream;
 use tokio_postgres::NoTls;
 use tokio_postgres::SimpleQueryMessage::Row;
+use tokio_postgres::replication::LogicalReplicationStream;
 
 #[tokio::test]
 async fn test_replication() {
@@ -37,11 +37,15 @@ async fn test_replication_impl(binary: bool) {
         .simple_query("SELECT 'test_logical_replication'::regclass::oid")
         .await
         .unwrap();
-    let rel_id: u32 = if let Row(row) = &res[0] {
-        row.get("oid").unwrap().parse().unwrap()
-    } else {
-        panic!("unexpeced query message");
-    };
+    let rel_id: u32 = res
+        .iter()
+        .find_map(|message| match message {
+            Row(row) => row.get("oid"),
+            _ => None,
+        })
+        .expect("expected relation OID row")
+        .parse()
+        .unwrap();
 
     client
         .simple_query("DROP PUBLICATION IF EXISTS test_pub")
@@ -59,11 +63,13 @@ async fn test_replication_impl(binary: bool) {
         slot
     );
     let slot_query = client.simple_query(&query).await.unwrap();
-    let lsn = if let Row(row) = &slot_query[0] {
-        row.get("consistent_point").unwrap()
-    } else {
-        panic!("unexpeced query message");
-    };
+    let lsn = slot_query
+        .iter()
+        .find_map(|message| match message {
+            Row(row) => row.get("consistent_point"),
+            _ => None,
+        })
+        .expect("expected replication slot row");
 
     // issue a query that will appear in the slot's stream since it happened after its creation
     client

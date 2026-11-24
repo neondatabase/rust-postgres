@@ -1719,3 +1719,25 @@ fn find_null(buf: &[u8], start: usize) -> io::Result<usize> {
 fn get_str(buf: &[u8]) -> io::Result<&str> {
     str::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
 }
+
+#[cfg(test)]
+mod replication_tests {
+    use super::*;
+
+    #[test]
+    fn interpreted_wal_header_matches_safekeeper() {
+        for frame in [
+            Bytes::from_static(b"0\0\0\0\0\0\0\0\x10\0\0\0\0\0\0\0\x20payload"),
+            Bytes::from_static(b"0\0\0\0\0\0\0\0\x10\0\0\0\0\0\0\0\x20"),
+        ] {
+            let ReplicationMessage::RawInterpretedWalRecords(body) =
+                ReplicationMessage::parse(&frame).unwrap()
+            else {
+                panic!("expected interpreted WAL records");
+            };
+            assert_eq!(body.streaming_lsn(), 16);
+            assert_eq!(body.commit_lsn(), 32);
+            assert_eq!(body.data(), &frame[17..]);
+        }
+    }
+}
