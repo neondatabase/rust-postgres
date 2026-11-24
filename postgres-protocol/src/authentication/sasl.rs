@@ -14,6 +14,8 @@ use std::mem;
 use std::str;
 
 const NONCE_LENGTH: usize = 24;
+// Limit server-controlled PBKDF2 work, as upstream does.
+const MAX_ITERATION_COUNT: u32 = 100_000;
 
 /// The identifier of the SCRAM-SHA-256 SASL authentication mechanism.
 pub const SCRAM_SHA_256: &str = "SCRAM-SHA-256";
@@ -190,6 +192,13 @@ impl ScramSha256 {
 
         if !parsed.nonce.starts_with(&client_nonce) {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid nonce"));
+        }
+
+        if parsed.iteration_count > MAX_ITERATION_COUNT {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "SCRAM iteration count exceeds the maximum allowed",
+            ));
         }
 
         let salt = match STANDARD.decode(parsed.salt) {
@@ -476,5 +485,15 @@ mod test {
         assert_eq!(str::from_utf8(scram.message()).unwrap(), client_final);
 
         scram.finish(server_final.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn excessive_iteration_count_is_rejected() {
+        let nonce = "9IZ2O01zb9IgiIZ1WJ/zgpJB";
+        let server_first =
+            "r=9IZ2O01zb9IgiIZ1WJ/zgpJBjx/oIRLs02gGSHcw1KEty3eY,s=fs3IXBy7U7+IvVjZ,i=100001";
+        let mut scram =
+            ScramSha256::new_inner(b"foobar", ChannelBinding::unsupported(), nonce.to_string());
+        assert!(scram.update(server_first.as_bytes()).is_err());
     }
 }
