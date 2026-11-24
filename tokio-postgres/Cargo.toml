@@ -10,9 +10,6 @@ readme = "../README.md"
 keywords = ["database", "postgres", "postgresql", "sql", "async"]
 categories = ["database"]
 
-[lib]
-test = false
-
 [[bench]]
 name = "bench"
 harness = false
