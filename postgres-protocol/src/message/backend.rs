@@ -1741,3 +1741,29 @@ mod replication_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod replication_tuple_tests {
+    use super::*;
+
+    #[test]
+    fn parses_null_and_unchanged_toast_values() {
+        let mut null = Buffer {
+            bytes: Bytes::from_static(b"n"),
+            idx: 0,
+        };
+        assert!(matches!(
+            TupleData::parse(&mut null).unwrap(),
+            TupleData::Null
+        ));
+
+        let mut unchanged_toast = Buffer {
+            bytes: Bytes::from_static(b"u"),
+            idx: 0,
+        };
+        assert!(matches!(
+            TupleData::parse(&mut unchanged_toast).unwrap(),
+            TupleData::UnchangedToast
+        ));
+    }
+}
