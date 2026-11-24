@@ -1,12 +1,12 @@
 //! Utilities for working with the PostgreSQL replication copy both format.
 
-use crate::copy_both::CopyBothDuplex;
 use crate::Error;
+use crate::copy_both::CopyBothDuplex;
 use bytes::{BufMut, Bytes, BytesMut};
-use futures_util::{ready, SinkExt, Stream};
+use futures_util::{SinkExt, Stream, ready};
 use pin_project_lite::pin_project;
-use postgres_protocol::message::backend::{LogicalReplicationMessage, ReplicationMessage};
 use postgres_protocol::PG_EPOCH;
+use postgres_protocol::message::backend::{LogicalReplicationMessage, ReplicationMessage};
 use postgres_types::PgLsn;
 use std::pin::Pin;
 use std::task::{Context, Poll};

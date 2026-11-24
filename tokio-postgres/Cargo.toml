@@ -11,9 +11,6 @@ keywords = ["database", "postgres", "postgresql", "sql", "async"]
 categories = ["database"]
 rust-version = "1.85"
 
-[lib]
-test = false
-
 [[bench]]
 name = "bench"
 harness = false
