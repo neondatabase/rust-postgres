@@ -270,7 +270,7 @@ impl<'a> FallibleIterator for HstoreEntries<'a> {
         self.remaining -= 1;
 
         let key_len = self.buf.read_i32::<BigEndian>()?;
-        if key_len < 0 {
+        if key_len < 0 || key_len as usize > self.buf.len() {
             return Err("invalid key length".into());
         }
         let (key, buf) = self.buf.split_at(key_len as usize);
@@ -281,6 +281,9 @@ impl<'a> FallibleIterator for HstoreEntries<'a> {
         let value = if value_len < 0 {
             None
         } else {
+            if value_len as usize > self.buf.len() {
+                return Err("invalid value length".into());
+            }
             let (value, buf) = self.buf.split_at(value_len as usize);
             let value = str::from_utf8(value)?;
             self.buf = buf;

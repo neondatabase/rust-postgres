@@ -72,6 +72,24 @@ fn hstore() {
 }
 
 #[test]
+fn hstore_invalid_key_length() {
+    let buf: &[u8] = &[0, 0, 0, 1, 0, 0, 0, 3, b'a'];
+    assert!(hstore_from_sql(buf)
+        .unwrap()
+        .collect::<HashMap<_, _>>()
+        .is_err());
+}
+
+#[test]
+fn hstore_invalid_value_length() {
+    let buf: &[u8] = &[0, 0, 0, 1, 0, 0, 0, 1, b'a', 0, 0, 0, 3, b'b'];
+    assert!(hstore_from_sql(buf)
+        .unwrap()
+        .collect::<HashMap<_, _>>()
+        .is_err());
+}
+
+#[test]
 fn varbit() {
     let len = 12;
     let bits = [0b0010_1011, 0b0000_1111];
