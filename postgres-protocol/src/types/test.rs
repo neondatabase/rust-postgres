@@ -89,6 +89,25 @@ fn hstore_invalid_length() {
 }
 
 #[test]
+fn hstore_invalid_value_length() {
+    // A valid short key followed by a value length larger than the remaining
+    // buffer must reach the value parser and error rather than panic.
+    let buf: &[u8] = &[
+        0, 0, 0, 1, // entry count: 1
+        0, 0, 0, 1,    // key length: 1
+        b'a', // key contents
+        0, 0, 3, 232, // value length: 1000
+        b'b', b'c', // only two value bytes actually present
+    ];
+    assert!(
+        hstore_from_sql(buf)
+            .unwrap()
+            .collect::<HashMap<_, _>>()
+            .is_err()
+    );
+}
+
+#[test]
 fn varbit() {
     let len = 12;
     let bits = [0b0010_1011, 0b0000_1111];

@@ -336,6 +336,34 @@ mod test {
         }
     }
 
+    fn simple_columns() -> Arc<[SimpleColumn]> {
+        vec![
+            SimpleColumn::new("a".to_string()),
+            SimpleColumn::new("b".to_string()),
+        ]
+        .into()
+    }
+
+    #[test]
+    fn simple_query_rejects_fewer_fields_than_columns() {
+        let body = data_row(1, &[b"x"]);
+        assert!(SimpleQueryRow::new(simple_columns(), body).is_err());
+    }
+
+    #[test]
+    fn simple_query_rejects_more_fields_than_columns() {
+        let body = data_row(3, &[b"x", b"y", b"z"]);
+        assert!(SimpleQueryRow::new(simple_columns(), body).is_err());
+    }
+
+    #[test]
+    fn simple_query_accepts_matching_field_count() {
+        let body = data_row(2, &[b"x", b"y"]);
+        let row = SimpleQueryRow::new(simple_columns(), body).unwrap();
+        assert_eq!(row.get(0), Some("x"));
+        assert_eq!(row.get(1), Some("y"));
+    }
+
     #[test]
     fn fewer_data_row_fields_than_columns_is_rejected() {
         // a server advertising two columns but sending a DataRow with a single
