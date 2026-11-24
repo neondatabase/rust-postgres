@@ -12,6 +12,7 @@ categories = ["database"]
 rust-version = "1.85"
 
 [features]
+default = ["with-chrono-0_4"]
 derive = ["postgres-derive"]
 array-impls = ["array-init"]
 js = ["postgres-protocol/js"]
