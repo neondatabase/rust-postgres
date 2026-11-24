@@ -1707,3 +1707,29 @@ fn find_null(buf: &[u8], start: usize) -> io::Result<usize> {
 fn get_str(buf: &[u8]) -> io::Result<&str> {
     str::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
 }
+
+#[cfg(test)]
+mod replication_tuple_tests {
+    use super::*;
+
+    #[test]
+    fn parses_null_and_unchanged_toast_values() {
+        let mut null = Buffer {
+            bytes: Bytes::from_static(b"n"),
+            idx: 0,
+        };
+        assert!(matches!(
+            TupleData::parse(&mut null).unwrap(),
+            TupleData::Null
+        ));
+
+        let mut unchanged_toast = Buffer {
+            bytes: Bytes::from_static(b"u"),
+            idx: 0,
+        };
+        assert!(matches!(
+            TupleData::parse(&mut unchanged_toast).unwrap(),
+            TupleData::UnchangedToast
+        ));
+    }
+}
