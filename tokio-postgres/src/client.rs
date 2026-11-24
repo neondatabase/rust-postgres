@@ -661,9 +661,9 @@ impl Client {
     ///
     /// Statements should be separated by semicolons. If an error occurs, execution of the sequence will stop at that
     /// point. The simple query protocol returns the values in rows as strings rather than in their binary encodings,
-    /// so the associated row type doesn't work with the `FromSql` trait. Rather than simply returning a list of the
-    /// rows, this method returns a list of an enum which indicates either the completion of one of the commands,
-    /// or a row of data. This preserves the framing between the separate statements in the request.
+    /// so the associated row type doesn't work with the `FromSql` trait. This method returns messages that describe
+    /// each result set: a row description, zero or more data rows, and command completion. This preserves the
+    /// framing between statements in the request.
     ///
     /// # Warning
     ///
@@ -678,9 +678,9 @@ impl Client {
     ///
     /// Statements should be separated by semicolons. If an error occurs, execution of the sequence will stop at that
     /// point. The simple query protocol returns the values in rows as strings rather than in their binary encodings,
-    /// so the associated row type doesn't work with the `FromSql` trait. Rather than simply returning a list of the
-    /// rows, this method returns a list of an enum which indicates either the completion of one of the commands,
-    /// or a row of data. This preserves the framing between the separate statements in the request.
+    /// so the associated row type doesn't work with the `FromSql` trait. This method returns a stream of messages
+    /// that describe each result set: a row description, zero or more data rows, and command completion. This
+    /// preserves the framing between statements in the request.
     ///
     /// # Warning
     ///

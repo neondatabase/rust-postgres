@@ -259,7 +259,7 @@ pub enum SimpleQueryMessage {
     ///
     /// The number of rows modified or selected is returned.
     CommandComplete(u64),
-    /// Column values of the proceeding row values
+    /// Column names for the rows in this result set.
     RowDescription(Arc<[SimpleColumn]>),
 }
 
